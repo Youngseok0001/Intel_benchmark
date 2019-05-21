@@ -10,31 +10,28 @@
 # 4. IPython
 
 # network and dataset 
-# 1. net_info = VAE(2conv + x~normal_sample() + 2 deconv)
+# 1. net_info = VAE:: 2 * ConvBlocks -> x_i ~ normal(nu_i,std_i) -> 2*DeconvBlock)
 # 2. mnist
-# 3. batch_size = 256
+# 3. batch_size = 100
 # 4. epoch = 10
 
 # what we are measuring
-# 1. train time/iteration +-se
-# 2. inference time/iteration +- 2*se 
+# 1. train time/epoch (mean, 95%CI)
+# 2. inference time/epoch (mean, 95%CI)
+
 
 import os
 clear = lambda: os.system('cls')
 clear()
 
 # STEP 0: load packages
-from collections import deque
+
 import tensorflow as tf
-import tensorflow.keras as keras
+import tensorflow.keras as K
 import numpy as np
 import time
 from matplotlib import pyplot as plt
 from IPython import display
-
-
-
-
 tf.enable_eager_execution()
 
 # STEP 0: SET CONFIGURATION
@@ -44,14 +41,17 @@ BATCH_SIZE = 256
 EPOCH = 3
 latent_dim = 50
 num_examples_to_generate = 16
-
+prefetch_buffer_size = 10
+lr = 1E-4
 
 
 # STEP 1: CREATE DATA_GENERATOR
 (train_images, _), (test_images, _) = tf.keras.datasets.mnist.load_data()
 
-train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')/255.
-test_images = test_images.reshape(test_images.shape[0], 28, 28, 1).astype('float32')/255.
+  # 1.[N, W * H * C] to [N, W, H, C]
+  # 2.Simple nomalisation = ./255
+train_images = train_images.reshape(-1, 28, 28, 1).astype('float32')/255.
+test_images = test_images.reshape(-1, 28, 28, 1).astype('float32')/255.
 
   # Threshold 
 train_images = np.where(train_images>0.5, 1., 0.).astype('float32')
@@ -60,64 +60,70 @@ test_images = np.where(test_images>0.5, 1., 0.).astype('float32')
   # Convert to tensor
 train_dataset = tf.data.Dataset.from_tensor_slices(train_images).\
                   shuffle(TRAIN_BUF).\
-                  batch(BATCH_SIZE)
+                  batch(BATCH_SIZE).\
+                  prefetch(buffer_size = prefetch_buffer_size)
+
 test_dataset = tf.data.Dataset.from_tensor_slices(test_images).\
                   shuffle(TEST_BUF).\
-                  batch(BATCH_SIZE)
+                  batch(BATCH_SIZE).\
+                  prefetch(buffer_size = prefetch_buffer_size)
+
 
 
 # STEP 1: CREATE MODEL
-class VAE(keras.Model):
+class VAE(K.Model):
   def __init__(self, latent_dim):
     super(VAE, self).__init__()
+    
     self.latent_dim = latent_dim
-    self.inference_net = keras.Sequential(
+
+    self.inference_net = K.Sequential(
       [
-          keras.layers.InputLayer(input_shape=(28, 28, 1)),
-          keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation='relu'),
-          keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation='relu'),
-          keras.layers.Flatten(),
-          keras.layers.Dense(2*latent_dim),
+          K.layers.InputLayer(input_shape = (28, 28, 1)),
+          K.layers.Conv2D(filters = 32, kernel_size = 3, strides = (2, 2), activation = 'relu'),
+          K.layers.Conv2D(filters = 64, kernel_size = 3, strides = (2, 2), activation = 'relu'),
+          K.layers.Flatten(),
+          K.layers.Dense(2 * latent_dim)
       ]
     )
 
-    self.generative_net = keras.Sequential(
+    self.generative_net = K.Sequential(
         [
-          keras.layers.InputLayer(input_shape=(latent_dim,)),
-          keras.layers.Dense(units=7*7*32, activation=tf.nn.relu),
-          keras.layers.Reshape(target_shape=(7, 7, 32)),
-          keras.layers.Conv2DTranspose(
-              filters=64,
-              kernel_size=3,
-              strides=(2, 2),
-              padding="SAME",
-              activation='relu'),
-          keras.layers.Conv2DTranspose(
-              filters=32,
-              kernel_size=3,
-              strides=(2, 2),
-              padding="SAME",
-              activation='relu'),
+          K.layers.InputLayer(input_shape =  (latent_dim,)),
+          K.layers.Dense(units = 7 * 7 * 32, activation = tf.nn.relu),
+          K.layers.Reshape(target_shape = (7, 7, 32)),
+          K.layers.Conv2DTranspose(
+              filters = 64,
+              kernel_size = 3,
+              strides = (2, 2),
+              padding = "SAME",
+              activation = 'relu'),
+          K.layers.Conv2DTranspose(
+              filters = 32,
+              kernel_size = 3,
+              strides = (2, 2),
+              padding = "SAME",
+              activation = 'relu'),
           # No activation
-          keras.layers.Conv2DTranspose(
-              filters=1, kernel_size=3, strides=(1, 1), padding="SAME"),
+          K.layers.Conv2DTranspose(
+              filters = 1, kernel_size = 3, strides = (1, 1), padding = "SAME"),
         ]
     )
 
-  def sample(self, eps=None):
+  def sample(self, eps = None):
     if eps is None:
-      eps = tf.random.normal(shape=(100, self.latent_dim))
-    return self.decode(eps, apply_sigmoid=True)
+      eps = tf.random.normal(shape = (100, self.latent_dim))
+    return self.decode(eps, apply_sigmoid = True)
 
   def encode(self, x):
-    mean, logvar = tf.split(self.inference_net(x), num_or_size_splits=2, axis=1)
+    mean, logvar = tf.split(self.inference_net(x), num_or_size_splits = 2, axis = 1)
     return mean, logvar
 
   def reparameterize(self, mean, logvar):
-    eps = tf.random.normal(shape=mean.shape)
+    eps = tf.random.normal(shape = mean.shape)
     return eps * tf.exp(logvar * .5) + mean
 
-  def decode(self, z, apply_sigmoid=False):
+  def decode(self, z, apply_sigmoid = False):
     logits = self.generative_net(z)
     if apply_sigmoid:
       probs = tf.sigmoid(logits)
@@ -130,7 +136,7 @@ def log_normal_pdf(sample, mean, logvar, raxis=1):
   log2pi = tf.math.log(2. * np.pi)
   return tf.reduce_sum(
       -.5 * ((sample - mean) ** 2. * tf.exp(-logvar) + logvar + log2pi),
-      axis=raxis)
+      axis = raxis)
 
 def compute_loss(model, x):
   mean, logvar = model.encode(x)
@@ -151,17 +157,6 @@ def compute_gradients(model, x):
 def apply_gradients(optimizer, gradients, variables):
   optimizer.apply_gradients(zip(gradients, variables))  
   
-  
-optimizer = tf.train.AdamOptimizer(learning_rate=1E-4)
-  
-
-  # keeping the random vector constant for generation (prediction) so
-  # it will be easier to see the improvement.
-random_vector_for_generation = tf.random.normal(
-    shape=[num_examples_to_generate, latent_dim])
-
-model = VAE(latent_dim)
-
 def generate_and_save_images(model, epoch, test_input):
   predictions = model.sample(test_input)
   fig = plt.figure(figsize=(4,4))
@@ -175,24 +170,69 @@ def generate_and_save_images(model, epoch, test_input):
   plt.savefig('image_at_epoch_{:04d}.png'.format(epoch))
   plt.show()
   
-generate_and_save_images(model, 0, random_vector_for_generation)
+  
+  
+  # get mean and 2*se of time estimate(E[time_avg] +- 2*SE[time_avg]).
+def get_mean_se(xs):
+  mean = np.mean(xs)
+  se = np.std(xs)/np.sqrt(len(xs))
+  return mean, se
+
+
+
+# STEP 2: Run model
+optimizer = tf.train.AdamOptimizer(learning_rate = lr)
+  
+random_vector_for_generation = tf.random.normal( shape = [num_examples_to_generate, latent_dim])
+
+model = VAE(latent_dim)
+
+  
+#generate_and_save_images(model, 0, random_vector_for_generation)
+
+times = []
 
 for e in range(EPOCH):
+  
   start_time = time.time()
-  for train_x in train_dataset:
+
+  for i, train_x in enumerate(train_dataset):
     gradients, loss = compute_gradients(model, train_x)
     apply_gradients(optimizer, gradients, model.trainable_variables)
-  end_time = time.time()
+    
+    if i % 20 == 0:
+      print("train loss at {}th iteration is {}".format(i,loss))
+      #generate_and_save_images(model, 0, random_vector_for_generation)
 
-  if e % 1 == 0:
-    loss = tf.keras.metrics.Mean()
-    for test_x in test_dataset:
-      loss(compute_loss(model, test_x))
-    elbo = -loss.result()
-    display.clear_output(wait=False)
-    print('Epoch: {}, Test set ELBO: {}, '
-          'time elapse for current epoch {}'.format(e,
-                                                    elbo,
-                                                    end_time - start_time))
-    generate_and_save_images(
-        model, EPOCH, random_vector_for_generation)
+  end_time = time.time()
+  time_diff = end_time - start_time
+  times.append(time_diff)
+  
+mean, se = get_mean_se(times)
+print("time/epoch : {mean},[{lb},{up}]".format(mean = mean , 
+                                               lb   = mean - 2*se,
+                                               up   = mean + 2*se))
+  
+times = []
+
+for e in range(EPOCH):
+
+  start_time = time.time()
+  losses = []
+  
+  for test_x in test_dataset:
+    loss = compute_loss(model, test_x)
+    losses.append(loss.numpy())
+
+  end_time = time.time()
+  time_diff = end_time - start_time
+  times.append(time_diff)
+  
+  
+mean, se = get_mean_se(times)
+print("test loss:{}".format(np.mean(losses)))
+print("infernce time/epoch : {mean},[{lb},{up}]".format(mean = mean , 
+                                               lb   = mean - 2*se,
+                                               up   = mean + 2*se))
+
+#generate_and_save_images(model, EPOCH, random_vector_for_generation)

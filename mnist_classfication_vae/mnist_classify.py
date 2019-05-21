@@ -14,15 +14,17 @@
 # 4. epoch = 3
 
 # what we are measuring
-# 1. train time/iteration +-se
-# 2. inference time/iteration +- 2*se 
+# 1. train time/epoch +-2 * se
+# 2. inferance time/epoch +-2 * se
 
+import os
+clear = lambda: os.system('cls')
+clear()
 
 # STEP 0: load packages
 
-from collections import deque
 import tensorflow as tf
-import tensorflow.keras as keras
+import tensorflow.keras as K
 import numpy as np
 import time
 
@@ -33,41 +35,44 @@ tf.enable_eager_execution()
 TRAIN_BUF = 60000
 TEST_BUF = 10000
 BATCH_SIZE = 256
-EPOCH = 3
+EPOCH = 2
+prefetch_buffer_size = 10
 
 
 # STEP 1: CREATE DATA_GENERATOR
 (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
 
-train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')/255.0
-test_images = test_images.reshape(test_images.shape[0], 28, 28, 1).astype('float32')/255.0
+  # 1.[N, W * H * C] to [N, W, H, C]
+  # 2.Simple nomalisation = ./255
+train_images = train_images.reshape(-1, 28, 28, 1).astype('float32')/255.0
+test_images = test_images.reshape(-1, 28, 28, 1).astype('float32')/255.0
 
-  # Normalize & format
-train_images /= 255.
-test_images /= 255.
+  # Int64 to Int 32. 
 train_labels = train_labels.astype('int32')
 test_labels = test_labels.astype('int32')
 
   # tf.data generator
 train_dataset = tf.data.Dataset.from_tensor_slices((train_images,train_labels)).\
                   shuffle(TRAIN_BUF).\
-                  batch(BATCH_SIZE)
+                  batch(BATCH_SIZE).\
+                  prefetch(buffer_size = prefetch_buffer_size)
+
 test_dataset = tf.data.Dataset.from_tensor_slices((test_images,test_labels)).\
                   shuffle(TEST_BUF).\
-                  batch(BATCH_SIZE)
+                  batch(BATCH_SIZE).\
+                  prefetch(buffer_size = prefetch_buffer_size)
 
 
 # STEP 2: DEFINE MODEL
   # create convolution block layer 
-class conv_block(tf.keras.Model):
+class conv_block(K.Model):
   # conv_block composed of conv + bn + relu + pool 
-  
   def __init__(self, kernel_size, filter_num): 
     super(conv_block, self).__init__(name='conv_block')
     
-    self.conv = tf.keras.layers.Conv2D(filter_num, kernel_size, padding = 'same')
-    self.bn = tf.keras.layers.BatchNormalization()
-    self.relu = tf.keras.layers.Activation("relu")
+    self.conv = K.layers.Conv2D(filter_num, kernel_size, padding = 'same')
+    self.bn = K.layers.BatchNormalization()
+    self.relu = K.layers.Activation("relu")
     
   def call(self, input_tensor, training=False):
     x = self.conv(input_tensor)
@@ -135,21 +140,21 @@ def apply_gradients(optimizer, gradients, variables):
 def get_mean_se(xs):
   mean = np.mean(xs)
   se = np.std(xs)/np.sqrt(len(xs))
-  return mean, 2*se
+  return mean, se
   
   # build model 
 model = simple_model()
 
 
   # execute trainining 
+times = []
 for e in range(EPOCH):
-    
-    times = deque(maxlen = 10)
-    
+  
+  start_time = time.time()
+  
   for i, batch in enumerate(train_dataset):    
     img_batch, label_batch = batch
     with tf.GradientTape() as tape:
-      start_time = time.time()
       
       logits = model.forward(img_batch, is_train = True)
       loss = get_loss(logits, label_batch)
@@ -157,32 +162,42 @@ for e in range(EPOCH):
       #optimizer = tf.keras.optimizers.Adam(1e-4)
       optimizer = tf.train.AdamOptimizer(learning_rate=1E-3)
       apply_gradients(optimizer,grads,model.trainable_variables)
-      
-      end_time = time.time()
-      
-      diff_time = end_time - start_time
-      times.extend([diff_time])
-          
-    if i % 10 == 0:
-      mean, sse = get_mean_se(times)
+
+    if i % 20 == 0:
       print("train loss at {}th iteration is {}".format(i,loss))
-      print("forward+backward time:{0:.2f} +-{1:.2f}/iteration".format(mean, sse))
-    
-  accs = []
-  times = deque(maxlen = 10)
+      
+  end_time = time.time()
+  diff_time = end_time - start_time
+  times.append(diff_time)
   
+mean, se = get_mean_se(times)
+print("time/epoch : {mean},[{lb},{up}]".format(mean = mean , 
+                                               lb   = mean - 2*se,
+                                               up   = mean + 2*se))
+
+times = []
+"just to get 95%CI"
+for i in range(EPOCH): 
+
+  start_time = time.time()
+  accs = []
+
   for img, label in test_dataset:
-    start_time = time.time()
+    
     
     logit =  model.forward(img, is_train = True)
     match = tf.equal(label, tf.cast(tf.argmax(logit, 1), tf.int32))
     match = tf.cast(match, tf.float32).numpy()
-    acc = np.mean(match)x
+    acc = np.mean(match)
     accs.append(acc)
-    end_time = time.time()
-    diff_time = end_time - start_time
-    times.extend([diff_time])
     
-  print("test_accuracy:{}".format(np.mean(accs)))
-  print("forward time:{0:.2f}/iteration".format(end_time - start_time))
+  end_time = time.time()
+  diff_time = end_time - start_time
+  times.append(diff_time)
+    
 
+mean, se = get_mean_se(times)
+print("test_accuracy:{}".format(np.mean(accs)))
+print("time/epoch : {mean},[{lb},{up}]".format(mean = mean , 
+                                               lb   = mean - 2*se,
+                                               up   = mean + 2*se))

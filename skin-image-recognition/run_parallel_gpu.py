@@ -23,26 +23,33 @@
 import tensorflow as tf
 import numpy as np
 import tensorflow.contrib.slim as slim
-import csv, os, functools, itertools, collections, six, time
+import csv, os, functools, itertools, collections, six, time, re
 
 from glob import glob
 from collections import deque
 from datasets.utils import get_imgdir_label, label_to_index, parser, preprocessors
 from models import nets_factory
 
-os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 # STEP 1: SET_config
 # model config
+num_gpu = 2
+os.environ["CUDA_VISIBLE_DEVICES"]= "1,2"
 lr = 0.001 #learning_rate
 batch_size = 32 # batch_size
 epoch = 3 
 weight_decay = 0.0 # regularizer constant 
-model_name = ["densenet121","inception_v4","vgg19"][1] # model selection 
-variable_to_exclude = ['InceptionV4/AuxLogits','InceptionV4/Logits']
+model_name = ["densenet161","inception_v4","vgg_19"][0] # model selection 
+variable_to_exclude = {
+                      "densenet161":['densenet161/logits'],
+                      "inception_v4":['InceptionV4/AuxLogits','InceptionV4/Logits'],
+                      "vgg_19":['vgg_19/fc8']
+                        }
+variable_to_exclude = variable_to_exclude[model_name]
 num_classes = 7 # number of classes
 weights_loc = "./weights/" # weights locations 
-pretrained_dir = glob(weights_loc + "pretrained/" + "*{}*.ckpt".format(model_name))[0] 
+pretrained_dir = glob(weights_loc + "pretrained/" + "*{}*.ckpt*".format(model_name))[0]
+pretrained_dir = re.search(".*ckpt",pretrained_dir)[0]
 #pretrained weights directory
 #trained_dir =  glob(weights_loc + "trained/" + "*{}*.ckpt".format(model_name))[0]  #post trained weights save location
 
@@ -65,19 +72,26 @@ img_lab_test = list(set(img_lab) - set(img_lab_train)) # test set 20% of img_lab
 imgs_train, labels_train = zip(*img_lab_train) # transpose train_data 
 imgs_test, labels_test = zip(*img_lab_test) # transpose test_data
 
+def get_mean_se(xs):
+  
+    mean = np.mean(xs)
+    se = np.std(xs)/np.sqrt(len(xs))
+    
+    return mean, se
+
 def forward(model_fn,inputs):
     
     images = inputs[0]
     labels = tf.cast(inputs[1], tf.int32)
     logits,_ = model_fn(images)
-     
+    
     return logits, labels 
 
 def forward_backward(model_fn,inputs):
     
     logits, labels = forward(model_fn, inputs)
     loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=labels, logits=logits)
-
+    
     return tf.reduce_mean(loss), logits, labels
 
 def start_training(sess, loss, train_op, acc_train, acc_test):
@@ -85,35 +99,51 @@ def start_training(sess, loss, train_op, acc_train, acc_test):
     # inits
     sess.run(tf.global_variables_initializer())
     sess.run(tf.local_variables_initializer())
-    
+
+    times = []
+
     for e in range(epoch):
-        
-        times = deque(maxlen = 10)
-        
-        for i in range(int(len(img_lab_train)/batch_size)):
-            start_time = time.time()
+
+        start_time = time.time()
+
+        for i in range(int(len(img_lab_train)/batch_size/num_gpu)):
+
             loss_realized, _ = sess.run([loss, train_op])
-            end_time = time.time()
-            time_diff = end_time - start_time 
-            times.extend([time_diff])
-            
+
             if i % 20 == 0:
                 print("train loss at {}th iteration is {}".format(i,loss_realized))
-                print("forward+backward time:{0:.2f}/iteration".format(np.mean(times)))
+            
+        end_time = time.time()
+        time_diff = end_time - start_time 
+        times.append(time_diff)
+      
+    mean, se = get_mean_se(times)
+    print("forward+backward time: mean:{mean}[{lb}, {ub}]/epoch".format(mean = mean,
+                                                       lb = mean - 2*se,
+                                                       ub = mean + 2*se))
 
-                
-        times = deque(maxlen = 10)
+    times = []
+
+    for e in range(epoch):
+    
         acc_realized_cum = []
+        start_time = time.time()
         
         for i in range(int(len(img_lab_test)/batch_size)):
-            start_time = time.time()
+
             acc_realized = sess.run(acc_test)
             acc_realized_cum.append(acc_realized)
-            end_time = time.time()
-            time_diff = end_time - start_time
-        print("test_accuracy is:{}".format(np.mean(acc_realized_cum)))
-        print("forward+backward time:{0:.2f}/iteration".format(np.mean(times)))
         
+        end_time = time.time()
+        time_diff = end_time - start_time
+        times.append(time_diff)
+    
+    mean, se = get_mean_se(times)
+    print("test_accuracy is:{}".format(np.mean(acc_realized_cum)))
+    print("forward time: mean:{mean}[{lb}, {ub}]/epoch".format(mean = mean,
+                                                       lb = mean - 2*se,
+                                                       ub = mean + 2*se))
+      
 def assign_to_device(device, ps_device):
 
     def _assign(op):
@@ -251,13 +281,14 @@ dataset_train = tf.data.Dataset.from_tensor_slices((list(imgs_train),list(labels
 dataset_train = dataset_train.\
            map(parser).\
            batch(batch_size).\
-           repeat(10)
+           repeat(epoch)
 
 # establish data_pipeline for testset
 dataset_test = tf.data.Dataset.from_tensor_slices((list(imgs_test),list(labels_test)))
 dataset_test = dataset_test.\
             map(parser).\
-            batch(1)
+            batch(batch_size).\
+            repeat(epoch)
 
 # initialize model function
 network_train_fn = nets_factory.get_network_fn(

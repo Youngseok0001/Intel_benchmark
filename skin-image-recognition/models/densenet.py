@@ -106,7 +106,7 @@ def _transition_block(inputs, num_filters, compression=1.0,
 
 
 def densenet(inputs,
-             num_classes=1000,
+             num_classes=7,
              reduction=None,
              growth_rate=None,
              num_filters=None,
