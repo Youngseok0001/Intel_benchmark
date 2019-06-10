@@ -172,7 +172,7 @@ def densenet(inputs,
           end_points_collection)
 
       if num_classes is not None:
-        end_points['predictions'] = slim.softmax(net, scope='predictions')
+        end_points['predictions'] = tf.nn.softmax(net, name = 'predictions')
 
       return net, end_points
 
