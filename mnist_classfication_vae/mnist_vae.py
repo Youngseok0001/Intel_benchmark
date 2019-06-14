@@ -57,7 +57,7 @@ test_images = test_images.reshape(-1, 28, 28, 1).astype('float32')/255.
 train_images = np.where(train_images>0.5, 1., 0.).astype('float32')
 test_images = np.where(test_images>0.5, 1., 0.).astype('float32')
 
-  # Convert to tensor
+ # Convert to tensor
 train_dataset = tf.data.Dataset.from_tensor_slices(train_images).\
                   shuffle(TRAIN_BUF).\
                   batch(BATCH_SIZE).\

@@ -80,7 +80,7 @@ def get_mean_se(xs):
     return mean, se
 
 def forward(model_fn,inputs):
-    
+
     images = inputs[0]
     labels = tf.cast(inputs[1], tf.int32)
     logits,_ = model_fn(images)

@@ -51,12 +51,14 @@ img_lab_test = list(set(img_lab) - set(img_lab_train)) # test set 20% of img_lab
 imgs_train, labels_train = zip(*img_lab_train) # transpose train_data 
 imgs_test, labels_test = zip(*img_lab_test) # transpose test_data
 
+
+# declare distrubuted learning strategy 
 mirrored_strategy = tf.distribute.MirroredStrategy(devices=["/gpu:0"])
 
 # reset existing graphs
 tf.reset_default_graph()
 
-# input function that 
+# input function  
 def input_fn(img_dirs, labels, batch_size, epoch):
     
     dataset = tf.data.Dataset.from_tensor_slices((list(img_dirs),list(labels))).\
@@ -111,7 +113,6 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
     # define optimizer
     optimizer = tf.train.AdadeltaOptimizer(lr)
     
-    
     # get mean and 2*se of time estimate(E[time_avg] +- 2*SE[time_avg]).
     def get_mean_se(xs):
   
@@ -139,7 +140,7 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             logits,_ = network_train_fn(images)
             #logits = tf.squeeze(logits)
             loss = compute_loss(logits, labels)
-
+        print(slim.get_model_variables())
         grads = tape.gradient(loss, slim.get_model_variables())
 
         update_vars = optimizer.apply_gradients(zip(grads, slim.get_model_variables()))
@@ -234,8 +235,8 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             mean, se = get_mean_se(times)
             print("forward+backward time: mean:{mean}[{lb}, {ub}]/epoch".format(
                                                                mean = mean,
-                                                               lb = mean - 2*se,
-                                                               ub = mean + 2*se))
+                                                               lb   = mean - 2*se,
+                                                               ub   = mean + 2*se))
             
              
             # start test
@@ -256,9 +257,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
 
             mean, se = get_mean_se(times)
             print("test_accuracy is:{}".format(sess.run(test_accuracy_result)))
-            print("forward time: mean:{mean}[{lb}, {ub}]/epoch".format(mean = mean,
-                                                               lb = mean - 2*se,
-                                                               ub = mean + 2*se))
+            print("forward time: mean:{mean}[{lb}, {ub}]/epoch".format(
+                                                               mean = mean,
+                                                               lb   = mean - 2*se,
+                                                               ub   = mean + 2*se))
             test_loss.reset_states()
             test_accuracy.reset_states()
 
