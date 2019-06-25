@@ -13,6 +13,7 @@
 # 3. batch_size = 256
 # 4. epoch = 3
 
+
 # what we are measuring
 # 1. train time/epoch +-2 * se
 # 2. inferance time/epoch +-2 * se
@@ -28,6 +29,10 @@ import tensorflow.keras as K
 import numpy as np
 import time
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
+
+
 tf.enable_eager_execution()
 
 # STEP 0: SET CONFIGURATION
@@ -38,6 +43,7 @@ BATCH_SIZE = 256
 EPOCH = 2
 prefetch_buffer_size = 10
 
+print(a)
 
 # STEP 1: CREATE DATA_GENERATOR
 (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
@@ -49,18 +55,19 @@ test_images = test_images.reshape(-1, 28, 28, 1).astype('float32')/255.0
 
   # Int64 to Int 32. 
 train_labels = train_labels.astype('int32')
+
 test_labels = test_labels.astype('int32')
 
-  # tf.data generator
+# tf.data generator
 train_dataset = tf.data.Dataset.from_tensor_slices((train_images,train_labels)).\
                   shuffle(TRAIN_BUF).\
                   batch(BATCH_SIZE).\
-                  prefetch(buffer_size = prefetch_buffer_size)
+                  prefetch(prefetch_buffer_size)
 
 test_dataset = tf.data.Dataset.from_tensor_slices((test_images,test_labels)).\
                   shuffle(TEST_BUF).\
                   batch(BATCH_SIZE).\
-                  prefetch(buffer_size = prefetch_buffer_size)
+                  prefetch(prefetch_buffer_size)
 
 
 # STEP 2: DEFINE MODEL
@@ -194,7 +201,6 @@ for i in range(EPOCH):
   end_time = time.time()
   diff_time = end_time - start_time
   times.append(diff_time)
-    
 
 mean, se = get_mean_se(times)
 print("test_accuracy:{}".format(np.mean(accs)))

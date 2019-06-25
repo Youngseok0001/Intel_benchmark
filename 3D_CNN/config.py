@@ -1,5 +1,5 @@
 from easydict import EasyDict 
-from numpy import sum
+import numpy as np
 from random import randint
 import tensorflow as tf
 
@@ -17,14 +17,11 @@ data_pipeline_configs = \
 
 data_proprocessing_configs = \
     {
+      "patch_size"        : [128, 128, 64],
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
-      "sigma_gaussian"    : 0.24,      
-      "resize_constant_1" : [randint(200,300), randint(200,300), randint(200,300)],
-      "resize_constant_2" : [128,128,64],
-      "condition"         : lambda img_lab : sum(img_lab[1]) != 0,
-      "alpha_distort"     : [10, 2e6, 2e6],
-      "sigma_distort"     : [1, 25, 25]    
+      "sigma_gaussian"    : 0.01,
+      "condition"         : lambda img_lab : np.sum(img_lab[1]) > 50
     }
 
 model_configs = \
@@ -32,7 +29,7 @@ model_configs = \
     "depth"               : 4, 
     "BASE_FILTER"         : 16,
     "PADDING"             : "same",
-    "DEEP_SUPERVISION"     : True,
+    "DEEP_SUPERVISION"    : True,
     "num_classes"         : 4,
     "optimizer"           : tf.train.AdadeltaOptimizer,
     "lr"                  : 0.001
