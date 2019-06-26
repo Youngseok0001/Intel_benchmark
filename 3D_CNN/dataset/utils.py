@@ -31,7 +31,7 @@ def split_list(imgs_labels_path, ratio = 0.8):
     
     return imgs_labels_path_train, imgs_labels_path_test
     
-def _omit_labeless_slices(img_lab, condition = None):
+def _omit_slices(img_lab, condition = None):
         
     # bring 3rd axis forward
     img = np.transpose(img_lab[0],(2,0,1,3))
@@ -57,6 +57,7 @@ def _random_crop_image(img_label, patch_size):
     img_label = np.concatenate((img,label), axis = -1)
 
     img_dim = np.array(np.shape(img_label)[:-1]) #[H, W, D]
+        
     patch_size = np.array(patch_size)
     
     # range of coord values that a center of patch can take 
@@ -65,8 +66,6 @@ def _random_crop_image(img_label, patch_size):
     
     # get a possible center from center range
     center = [np.random.randint(*r) for r in center_range]
-    
-    print(center)
     
 	#crop
     img_label_cropped = img_label[(center[0] - patch_size[0]//2) : (center[0] + patch_size[0]//2),
@@ -79,11 +78,14 @@ def _random_crop_image(img_label, patch_size):
     
     return img_croped, label_croped
 
+
+
 def _flip(img_label, axis):
     
     img, label = img_label[0], np.expand_dims(img_label[1], -1)
     img_label = np.concatenate((img,label), axis = -1)
 
+    # random flip function called from DLTK module
     fliped_img_label = flip(img_label, axis = axis)
     fliped_img, flipted_label = fliped_img_label[:,:,:,:-1], fliped_img_label[:,:,:,-1] 
     

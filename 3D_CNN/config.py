@@ -21,7 +21,7 @@ data_proprocessing_configs = \
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
       "sigma_gaussian"    : 0.01,
-      "condition"         : lambda img_lab : np.sum(img_lab[1]) > 50
+      "condition"         : lambda img_lab : np.sum(img_lab[0]) > 256
     }
 
 model_configs = \
@@ -36,7 +36,16 @@ model_configs = \
     }
 
 
+# visual_configs = \
+#     {
+#     "slice_n"             : 5,
+#     "evert_n_iter"        : 50,
+#     "trasparency"         : 0.3,
+#     "modality"            : {k:v for k, v in enumerate(["T1","T1C","T2","FLAIR"])},
+#     }
+
+
 config.update(data_pipeline_configs)
 config.update(data_proprocessing_configs)
 config.update(model_configs)
-
+#config.update(visual_configs)

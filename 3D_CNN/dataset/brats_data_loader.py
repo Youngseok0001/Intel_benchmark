@@ -19,7 +19,7 @@ sys.path.append('..')
 from config import *
 from .utils import get_data,\
                   get_img_label,\
-                  _omit_labeless_slices,\
+                  _omit_slices,\
                   _gaussian_noise,\
                   _set_size,\
                   _flip,\
@@ -30,7 +30,7 @@ from .utils import get_data,\
 def _preprocessor_numpy(img_dir, label_dir, is_train = True):
         
     # functions 
-    my_omit_slice     = partial(_omit_labeless_slices,condition = config.condition)
+    my_omit_slice     = partial(_omit_slices,condition = config.condition)
     my_gaussian_noise = partial(_gaussian_noise, sigma = config.sigma_gaussian)
     my_crop           = partial(_random_crop_image, patch_size = config.patch_size)
     my_normalise      = partial(_normalise, means = config.means, stds = config.stds)
