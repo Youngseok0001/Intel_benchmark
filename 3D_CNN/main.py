@@ -17,7 +17,7 @@ pacakges installed:
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 
 from glob import glob
 from random import shuffle
@@ -88,13 +88,15 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
         img, label = train_generator.get_next()
         
         logit = model_train_fn(img)
-        loss = 0.5*get_ce(label, logit, weighted = True) + 0.5*get_tversky_loss(label, logit)
         
+        loss = get_ce(label, logit, weighted = True) + get_tversky_loss(label, logit)
+
+
         values_to_load = {        
             "ce"      : get_ce(label, logit, weighted = True),
+            "iou"     : get_iou(label, logit),
             "dice"    : get_tversky_loss(label, logit),
             "acc"     : get_acc(label, logit),
-            "iou"     : get_iou(label, logit),
             "loss"    : loss,
             "train_op": optimizer.minimize(loss)}        
 
@@ -133,7 +135,7 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             start_time = time.time()
 
             for i in range(len(train_img_labels_path)//config.batch_size):            
-                _, _, loss_train, ce_train, dice_train, acc_train, iou_train = sess.run(
+                _, _, loss_train, ce_train, dice_train, acc_train = sess.run(
                     [values_to_load_train["train_op"],
                      values_to_load_train["iou"][1],
                      values_to_load_train["loss"],
@@ -147,7 +149,7 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                     print("train Acc  =", acc_train)
                     print("train Dice =", dice_train)
                     print("train CE   =", ce_train)
-                    print("train Iou  = {}".format(isess.run(values_to_load_train["iou"][0])))
+                    print("train Iou  = {}".format(sess.run(values_to_load_train["iou"][0])))
                     
                     print("\n")
                     

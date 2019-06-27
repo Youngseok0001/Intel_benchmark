@@ -36,16 +36,16 @@ def _preprocessor_numpy(img_dir, label_dir, is_train = True):
     my_normalise      = partial(_normalise, means = config.means, stds = config.stds)
     my_flip           = partial(_flip, axis = random.randint(0,2))
     
-    if is_train == True:
+    if is_train:
         # wrap functions
         composed = compose(my_flip,
                            my_crop,
                            my_gaussian_noise,
-                           my_normalise,
                            my_omit_slice,
+                           my_normalise,
                            get_img_label)
     
-    if is_train == False:
+    if not is_train:
         # wrap functions
         composed = compose(my_gaussian_noise,
                            my_normalise,
@@ -54,10 +54,7 @@ def _preprocessor_numpy(img_dir, label_dir, is_train = True):
     # apply
     img_processed, label_processed = composed(((img_dir, label_dir)))
     
-    # handle type 
-    img_processed, label_processed = tf.cast(img_processed, tf.float32), tf.cast(label_processed, tf.int32)    
-    
-    return img_processed, label_processed
+    return img_processed.astype('float32'), label_processed.astype('int32')
     
     
     
