@@ -8,9 +8,9 @@ config = EasyDict()
 data_pipeline_configs = \
     { "img_loc"           : "./dataset/Task01_BrainTumour/imagesTr/",    
       "lab_loc"           : "./dataset/Task01_BrainTumour/labelsTr/",
-      "batch_size"        : 1,
-      "epoch"             : 50,
-      "cpu_n"             : 20,
+      "batch_size"        : 6,
+      "epoch"             : 100,
+      "cpu_n"             : 30,
       "prefetch"          : 4,
       "split_ratio"       : 0.8
     }
@@ -32,20 +32,27 @@ model_configs = \
     "DEEP_SUPERVISION"    : True,
     "num_classes"         : 4,
     "optimizer"           : tf.train.AdamOptimizer,
-    "lr"                  : 0.001
+    "lr"                  : 0.001,
+    "loss_weights"        : [0.2,0.3,0.5]
     }
 
 
-# visual_configs = \
-#     {
-#     "slice_n"             : 5,
-#     "evert_n_iter"        : 50,
-#     "trasparency"         : 0.3,
-#     "modality"            : {k:v for k, v in enumerate(["T1","T1C","T2","FLAIR"])},
-#     }
+train_configs = \
+    {
+    "max_to_keep"         : 3,
+    "model_name"          : "3D unet with (dice + ce) loss",
+    "visualise"           : True,
+    "model_save_path"     : "./weights/",
+    "text_log_path"       : "./log/text/",
+    "visual_log_path"     : "./log/img/",
+    "colours"             : [[0,0,0],
+                             [255,0,0],
+                             [255,178,102],
+                             [255,255,51]]
+    }
 
 
 config.update(data_pipeline_configs)
 config.update(data_proprocessing_configs)
 config.update(model_configs)
-#config.update(visual_configs)
+config.update(train_configs)

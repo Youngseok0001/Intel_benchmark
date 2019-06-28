@@ -92,7 +92,7 @@ def _flip(img_label, axis):
     return fliped_img, flipted_label
 
 def _normalise(img_label, means, stds): 
-    return ((img_label[0] - means) / np.asarray(stds) ** 2,
+    return ((img_label[0] - means) / (np.asarray(stds) ** 2),
             img_label[1])    
 
 #.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-       

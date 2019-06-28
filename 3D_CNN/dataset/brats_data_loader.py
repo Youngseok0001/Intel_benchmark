@@ -47,7 +47,8 @@ def _preprocessor_numpy(img_dir, label_dir, is_train = True):
     
     if not is_train:
         # wrap functions
-        composed = compose(my_gaussian_noise,
+        composed = compose(my_crop,
+                           my_gaussian_noise,
                            my_normalise,
                            get_img_label)
         

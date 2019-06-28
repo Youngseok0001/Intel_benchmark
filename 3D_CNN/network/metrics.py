@@ -44,33 +44,6 @@ def get_ce(gt, logit, weighted = True):
     
     return tf.reduce_mean(_ce) + epsilon
 
-def get_tversky_loss(gt, pred):
-
-    alpha = 0.5
-    beta  = 0.5
-    epsilon = tf.constant(value=1e-10) 
-    num_classes = config.num_classes
-
-    y_pred = pred
-    y_true = tf.one_hot(gt,depth = num_classes)
-    
-    p0 = y_pred      
-    p1 = 1 - y_pred 
-    g0 = y_true
-    g1 = 1 - y_true
-    
-    num = tf.reduce_sum(p0 * g0, (0,1,2,3))
-    
-    den = num + \
-          alpha * tf.reduce_sum(p0 * g1,(0,1,2,3)) + \
-          beta * tf.reduce_sum(p1 * g0,(0,1,2,3)) + epsilon + tf.constant(value=1e-10) 
-    
-    T = tf.reduce_sum(num/den) 
-    
-    Ncl = tf.cast(y_true.get_shape()[-1], tf.float32)
-    
-    return (Ncl - T) + epsilon
-
 def get_acc(gt, pred):
     
     gt = tf.reshape( tf.cast(gt, tf.int32), (-1,))
@@ -111,6 +84,9 @@ def get_label_wise_dice_loss(y_true, y_pred):
     return 1 - get_dice_coef(y_true, y_pred)
 
 
+def get_label_wise_dice_loss(y_true, y_pred):
+    return 1 - get_dice_coef(y_true, y_pred)
+
 def get_label_wise_dice_coef(y_true, y_pred, max_label):
     y_true = tf.one_hot(y_true, depth = max_label)
     return [get_dice_coef(y_true[:,:,:,:,index], y_pred[:,:,:,:,index]) 
@@ -121,21 +97,29 @@ def get_label_wise_dice_coef(y_true, y_pred, max_label):
 def get_dice_loss(*args, **kwargs):
     return 1- tf.reduce_sum(get_label_wise_dice_coef(*args, **kwargs))/args[-1]
 
+
+def get_exp_dice_loss(*args, **kwargs):
+    
+    return tf.reduce_sum(
+            (-tf.math.log(
+                get_label_wise_dice_coef(*args, **kwargs))) ** 0.3) / args[-1]
+    
 if __name__ == '__main__':
 
     import os
     os.environ["CUDA_VISIBLE_DEVICES"] = "2" 
     
     # bad case_1
-    gt = tf.cast(tf.constant(np.random.randint(0,4, size = (1,64,64,64))), tf.int32)
-    pred = tf.nn.softmax(
-       tf.constant(
-           np.random.normal(10, size = (1,64,64,64,4)), dtype = tf.float32), axis = -1)
+    #img = np.random.normal(10, size = (6,64,64,64,4))
+    #gt = tf.cast(tf.constant(np.random.randint(0,4, size = (6,64,64,64))), tf.int32)
+    #pred = tf.nn.softmax(
+    #    tf.constant(
+    #        np.random.normal(10, size = (6,64,64,64,4)), dtype = tf.float32), axis = -1)
     
     
     # bad case_2
-    #gt = tf.cast(tf.constant(np.random.randint(0,4, size = (1,64,64,64))), tf.int32)
-    #pred = tf.constant(np.zeros(shape = (1,64,64,64,4)), dtype = tf.float32)
+    gt = tf.cast(tf.constant(np.random.randint(0,4, size = (1,64,64,64))), tf.int32)
+    pred = tf.constant(np.zeros(shape = (1,64,64,64,4)), dtype = tf.float32)
 
 
     #good case
@@ -146,16 +130,18 @@ if __name__ == '__main__':
     acc = get_acc(gt, pred)
     iou, iou_op = get_iou(gt, pred)
     dice_loss = get_dice_loss(gt, pred, 4)
+    exp_dice_loss = get_exp_dice_loss(gt, pred, 4)
     label_wise_dice = get_label_wise_dice_coef(gt, pred, 4)
 
-    to_call = [iou_op, acc, ce, dice_loss, label_wise_dice]
+    to_call = [iou_op, acc, ce, dice_loss, exp_dice_loss, label_wise_dice]
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-        [_, _acc, _ce, _dice_loss, _label_wise_dice] = sess.run(to_call)
+        [_, _acc, _ce, _dice_loss, _exp_dice_loss,_label_wise_dice] = sess.run(to_call)
         print("ce                   :",_ce)
         print("acc                  :",_acc) 
         print("dice loss            :",_dice_loss)
+        print("exp dice loss        :",_exp_dice_loss)        
         print("dice coef label wise :",_label_wise_dice)
         print("iou                  :",sess.run(iou) * 100)
