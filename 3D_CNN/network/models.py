@@ -7,6 +7,18 @@ import sys
 sys.path.append('..')
 from config import *
 
+
+
+# -*- coding: utf-8 -*-
+# File: custom_ops.py
+###
+# Code are borrowed from tensorpack modified to support 5d input for batchnorm.
+# https://github.com/tensorpack/tensorpack/blob/master/tensorpack/models/batch_norm.py
+###
+
+from tensorflow.contrib.framework import add_model_variable
+from tensorpack import VariableHolder
+
 #############################################
 #low level 3D-Unet implementation 
 #############################################
@@ -18,7 +30,7 @@ PADDING = config.PADDING
 DEEP_SUPERVISION = config.DEEP_SUPERVISION
 NUM_CLASS = config.num_classes
 
-def unet3d(inputs, reuse, training):
+def unet3d(inputs, reuse):
         
     with tf.variable_scope("unet_3d", reuse = reuse) as sc:
     
@@ -31,7 +43,7 @@ def unet3d(inputs, reuse, training):
                        kernel_size=(3,3,3),
                        strides=1,
                        padding=PADDING,
-                       activation=lambda x, name=None: BN_ReLU(x,training),
+                       activation=lambda x, name=None: BN_ReLU(x),
                        name="init_conv")
 
         for d in range(depth):
@@ -39,7 +51,7 @@ def unet3d(inputs, reuse, training):
             num_filters = BASE_FILTER * (2**d)
             filters.append(num_filters)
 
-            layer = Unet3dBlock('down{}'.format(d), layer, (3,3,3), num_filters, 1, training)
+            layer = Unet3dBlock('down{}'.format(d), layer, (3,3,3), num_filters, 1)
             print("{}th down feature with shape:{}".format(d + 1 ,layer.shape))
 
             down_list.append(layer)
@@ -51,7 +63,7 @@ def unet3d(inputs, reuse, training):
                                         kernel_size=(3,3,3),
                                         strides=(2,2,2),
                                         padding=PADDING,
-                                        activation=lambda x, name=None: BN_ReLU(x,training),
+                                        activation=lambda x, name=None: BN_ReLU(x),
                                         name="stride2conv{}".format(d))
 
 
@@ -59,21 +71,21 @@ def unet3d(inputs, reuse, training):
 
         for d in range(depth-2, -1, -1):
 
-            layer = UnetUpsample(d, layer, filters[d], training)
+            layer = UnetUpsample(d, layer, filters[d])
             layer = tf.concat([layer, down_list[d]], axis = -1)
             layer = tf.layers.conv3d(inputs=layer, 
                                     filters=filters[d],
                                     kernel_size=(3,3,3),
                                     strides=1,
                                     padding=PADDING,
-                                    activation=lambda x, name=None: BN_ReLU(x,training),
+                                    activation=lambda x, name=None: BN_ReLU(x),
                                     name="lo_conv0_{}".format(d))
             layer = tf.layers.conv3d(inputs=layer, 
                                     filters=filters[d],
                                     kernel_size=(1,1,1),
                                     strides=1,
                                     padding=PADDING,
-                                    activation=lambda x, name=None: BN_ReLU(x,training),
+                                    activation=lambda x, name=None: BN_ReLU(x),
                                     name="lo_conv1_{}".format(d))
 
             print("{}th up feature with shape:{}".format(d + 1 ,layer.shape))
@@ -112,7 +124,7 @@ def Upsample3D(prefix, l, scale=2):
     l = tf.keras.layers.UpSampling3D(size=(2,2,2))(l)
     return l
 
-def UnetUpsample(prefix, l, num_filters, training):
+def UnetUpsample(prefix, l, num_filters):
     
     l = Upsample3D('', l)
     l = tf.layers.conv3d(inputs=l, 
@@ -120,27 +132,49 @@ def UnetUpsample(prefix, l, num_filters, training):
                         kernel_size=(3,3,3),
                         strides = 1,
                         padding=PADDING,
-                        activation=lambda x, name=None: BN_ReLU(x, training),
+                        activation=lambda x, name=None: BN_ReLU(x),
                         name="up_conv1_{}".format(prefix))
     return l
 
 
-def BN_ReLU(inputs, training):
+def InstanceNorm5d(x, epsilon=1e-5, use_affine=True, gamma_init=None, data_format='channels_last'):
 
-	inputs = tf.layers.batch_normalization(
-				inputs=inputs,
-				axis=-1,
-				momentum=0.997,
-				epsilon=1e-5,
-				center=True,
-				scale=True,
-				training=training, 
-				fused=True)
+    shape = x.get_shape().as_list()
+    # assert len(shape) == 4, "Input of InstanceNorm has to be 4D!"
+    
+    axis = [1, 2, 3]
+    ch = shape[4]
+    new_shape = [1, 1, 1, 1, ch]
 
-	return tf.nn.relu6(inputs)
+    mean, var = tf.nn.moments(x, axis, keep_dims=True)
+
+    if not use_affine:
+        return tf.divide(x - mean, tf.sqrt(var + epsilon), name='output')
+
+    beta = tf.get_variable('beta', [ch], initializer=tf.constant_initializer())
+    beta = tf.reshape(beta, new_shape)
+    if gamma_init is None:
+        gamma_init = tf.constant_initializer(1.0)
+    gamma = tf.get_variable('gamma', [ch], initializer=gamma_init)
+    gamma = tf.reshape(gamma, new_shape)
+    ret = tf.nn.batch_normalization(x, mean, var, beta, gamma, epsilon, name='output')
+
+    vh = ret.variables = VariableHolder()
+    if use_affine:
+        vh.gamma = gamma
+        vh.beta = beta
+    return ret
 
 
-def Unet3dBlock(prefix, l, kernels, n_feat, s, training):
+
+def BN_ReLU(inputs):
+
+    l = InstanceNorm5d(inputs)
+    
+    return tf.nn.relu6(l)
+
+
+def Unet3dBlock(prefix, l, kernels, n_feat, s):
     
     l_in = l
 
@@ -151,10 +185,13 @@ def Unet3dBlock(prefix, l, kernels, n_feat, s, training):
                    kernel_size=kernels,
                    strides=1,
                    padding=PADDING,
-                   activation=lambda x, name=None: BN_ReLU(x,training),
+                   activation=lambda x, name=None: BN_ReLU(x),
                    name="{}_conv_{}".format(prefix, i))
 
     return l_in + l
+
+
+
 
 if __name__ == '__main__':
     
@@ -163,9 +200,13 @@ if __name__ == '__main__':
 
     tf.enable_eager_execution()
     x = tf.random.normal(shape = (1,256,256,128,4))
-    y = unet3d(x, training = False)
+    y = unet3d(x, reuse = True)
+    y = unet3d(x, reuse = False)
 
 
+        
+
+    
 #############################################
 #KERAS 3D-Unet
 #############################################

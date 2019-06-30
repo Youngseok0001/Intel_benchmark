@@ -8,19 +8,19 @@ config = EasyDict()
 data_pipeline_configs = \
     { "img_loc"           : "./dataset/Task01_BrainTumour/imagesTr/",    
       "lab_loc"           : "./dataset/Task01_BrainTumour/labelsTr/",
-      "batch_size"        : 6,
+      "batch_size"        : 1,
       "epoch"             : 100,
-      "cpu_n"             : 30,
-      "prefetch"          : 4,
+      "cpu_n"             : 10,
+      "prefetch"          : 100,
       "split_ratio"       : 0.8
     }
 
 data_proprocessing_configs = \
     {
-      "patch_size"        : [200, 200, 64],
+      "patch_size"        : [128, 128, 64],
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
-      "sigma_gaussian"    : 0.01,
+      "sigma_gaussian"    : 0.005,
       "condition"         : lambda img_lab : np.sum(img_lab[0]) != 0
     }
 
@@ -32,15 +32,15 @@ model_configs = \
     "DEEP_SUPERVISION"    : True,
     "num_classes"         : 4,
     "optimizer"           : tf.train.AdamOptimizer,
-    "lr"                  : 0.001,
-    "loss_weights"        : [0.2,0.3,0.5]
+    "lr"                  : 0.0001,
+    "loss_weights"        : [0.2,0.5,0.3]
     }
 
 
 train_configs = \
     {
     "max_to_keep"         : 3,
-    "model_name"          : "3D unet with (dice + ce) loss",
+    "model_name"          : "3D unet with (dice + ci + exp) loss",
     "visualise"           : True,
     "model_save_path"     : "./weights/",
     "text_log_path"       : "./log/text/",

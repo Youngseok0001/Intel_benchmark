@@ -24,11 +24,13 @@ from random import shuffle
 from functools import reduce, partial
 from random import randint, shuffle 
 from toolz import compose
+from IPython import display
 
 import numpy as np
 import nibabel as nib 
 import time
 import tensorflow as tf 
+from matplotlib import pyplot as plt
 tf.reset_default_graph()
 
 # personal modules and functions
@@ -53,8 +55,6 @@ labels_path = get_path(config.lab_loc)
 train_img_labels_path, test_img_labels_path = split_list(list(zip(imgs_path, labels_path)),
                                                          ratio = config.split_ratio)
 
-train_img_labels_path = train_img_labels_path[:20]
-test_img_labels_path = test_img_labels_path[:20]
 
 # establish data_pipeline for trainset 
 train_img, train_label = zip(*train_img_labels_path)
@@ -80,8 +80,8 @@ dataset_test = get_data_pipeline(test_img, test_label,
 
 # get models     
 print("initializing models ... \n")
-train_model = partial(unet3d, reuse = False, training = True)
-test_model  = partial(unet3d, reuse = True, training = False)
+train_model = partial(unet3d, reuse = False)
+test_model  = partial(unet3d, reuse = True)
 
 def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
     
@@ -102,8 +102,8 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
         exp_dice_loss   = get_exp_dice_loss(label, pred, config.depth) 
         label_wise_dice = get_label_wise_dice_coef(label, pred, config.depth)
         overall_loss    = (config.loss_weights[0] * ce_loss) + \
-                          (config.loss_weights[1] * dice_loss) + \
-                          (config.loss_weights[2] * exp_dice_loss)
+                          (config.loss_weights[1] * exp_dice_loss) + \
+                          (config.loss_weights[2] * dice_loss)
         
         optimizer = config.optimizer()
         train_op  = optimizer.minimize(overall_loss)
@@ -179,10 +179,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                     print_log("    DICE label wise = {}".format(_label_wise_dice))
                     print_log("\n\n")                    
                     
-                if (i % 10 == 0) and config.visualise:
+                if (i % 100 == 0):
                     
                     vis_slice(_im, _lab, _pred, 32, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
-            
+        
             end_time = time.time()
             time_diff = end_time - start_time 
             times_train.append(time_diff)
