@@ -17,20 +17,23 @@ pacakges installed:
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 
 from glob import glob
 from random import shuffle
 from functools import reduce, partial
 from random import randint, shuffle 
 from toolz import compose
+
+from matplotlib import pyplot as plt
 from IPython import display
+%matplotlib inline
 
 import numpy as np
 import nibabel as nib 
 import time
 import tensorflow as tf 
-from matplotlib import pyplot as plt
+
 tf.reset_default_graph()
 
 # personal modules and functions
@@ -72,8 +75,8 @@ dataset_train = get_data_pipeline(train_img, train_label,
 # test data pipeline
 dataset_test = get_data_pipeline(test_img, test_label,
                                  batch_size  = config.batch_size, 
-                                 prefetch    = config.prefetch,
-                                 cpu_n       = config.cpu_n,
+                                 prefetch    = 10,
+                                 cpu_n       = 10,
                                  epoch       = config.epoch,
                                  is_train    = False)
                                 
@@ -101,9 +104,8 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
         dice_loss       = get_dice_loss(label, pred, config.depth) 
         exp_dice_loss   = get_exp_dice_loss(label, pred, config.depth) 
         label_wise_dice = get_label_wise_dice_coef(label, pred, config.depth)
-        overall_loss    = (config.loss_weights[0] * ce_loss) + \
-                          (config.loss_weights[1] * exp_dice_loss) + \
-                          (config.loss_weights[2] * dice_loss)
+        overall_loss    = (0.2 * ce_loss) + \
+                          (0.8 * exp_dice_loss)
         
         optimizer = config.optimizer()
         train_op  = optimizer.minimize(overall_loss)
@@ -154,7 +156,9 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             """
             TRAIN 
             """
-            
+            if not os.path.exists(config.text_log_path):
+                os.makedirs(config.text_log_path)
+
             txt_file_path = config.text_log_path + "log_{}.txt".format(config.model_name)
             f_txt = open(txt_file_path,"a")
             print_log = partial(_print, f = f_txt)
@@ -179,9 +183,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                     print_log("    DICE label wise = {}".format(_label_wise_dice))
                     print_log("\n\n")                    
                     
-                if (i % 100 == 0):
-                    
-                    vis_slice(_im, _lab, _pred, 32, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
+                if (i % 20 == 0):
+                    if not os.path.exists(config.visual_log_path):
+                        os.makedirs(config.visual_log_path)
+                    vis_slice(_im, _lab, _pred, 70, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
         
             end_time = time.time()
             time_diff = end_time - start_time 
@@ -218,7 +223,8 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             time_diff = end_time - start_time 
                         
             times_test.append(time_diff)
-            
+            if not os.path.exists(config.model_save_path):
+                os.makedirs(config.model_save_path)
             print_log("Saving model ....")
             save(sess, saver, config.model_save_path, config.model_name, counter)
             

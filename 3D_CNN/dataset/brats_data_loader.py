@@ -19,7 +19,8 @@ sys.path.append('..')
 from config import *
 from .utils import get_data,\
                   get_img_label,\
-                  _omit_slices,\
+                  _elastic_transform,\
+                  _mean_std_shift,\
                   _gaussian_noise,\
                   _set_size,\
                   _flip,\
@@ -28,27 +29,28 @@ from .utils import get_data,\
 # functions 
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 def _preprocessor_numpy(img_dir, label_dir, is_train = True):
+    r1 = random.randint(0,2)
+    r2 = [np.random.uniform(-0.1,0.1), np.random.uniform(0.9,1.1)]
         
     # functions 
-    my_omit_slice     = partial(_omit_slices,condition = config.condition)
     my_gaussian_noise = partial(_gaussian_noise, sigma = config.sigma_gaussian)
     my_crop           = partial(_random_crop_image, patch_size = config.patch_size)
     my_normalise      = partial(_normalise, means = config.means, stds = config.stds)
-    my_flip           = partial(_flip, axis = random.randint(0,2))
+    my_flip           = partial(_flip, axis = r1)
+    my_meanstd_shift  = partial(_mean_std_shift, mean_shift = r2[0], std_shift = r2[1])
     
     if is_train:
         # wrap functions
         composed = compose(my_flip,
                            my_crop,
+                           my_meanstd_shift,
                            my_gaussian_noise,
-                           my_omit_slice,
                            my_normalise,
                            get_img_label)
     
     if not is_train:
         # wrap functions
         composed = compose(my_crop,
-                           my_gaussian_noise,
                            my_normalise,
                            get_img_label)
         
@@ -82,6 +84,7 @@ def get_data_pipeline(imgs_path, labels_path, epoch, batch_size = 1, prefetch = 
     
     return tf.data.Dataset.from_tensor_slices((list(imgs_path), list(labels_path))).\
         repeat(epoch).\
+        shuffle(386).\
         map(lambda img_path, label_path: 
             tuple(tf.py_func(preprocessor_numpy, [img_path, label_path], [tf.float32, tf.int32])), 
                 num_parallel_calls = cpu_n).\
@@ -94,15 +97,19 @@ if __name__ == '__main__':
     
     import os
     import tensorflow as tf
-    os.environ["CUDA_VISIBLE_DEVICES"]="3"
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
     tf.enable_eager_execution()
+
+    
+    from matplotlib import pyplot as plt
+    from IPython import display
 
     import sys 
     sys.path.append('..')
     from dataset.utils import get_path
     
-    img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/imagesTr/"    
-    lab_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/labelsTr/"
+    img_loc = "../dataset/Task01_BrainTumour/imagesTr/"    
+    lab_loc = "../dataset/Task01_BrainTumour/labelsTr/"
 
     # get img and label array 
     img_path = get_path(img_loc)
@@ -119,6 +126,12 @@ if __name__ == '__main__':
     img, lab = generator.get_next()
     
     
+    print(np.mean(img))
+    print(np.std(img))
     
+    plt.imshow(img[0,:,:,50,0])
+
+    plt.show()
+    plt.imshow(lab[0,:,:,50])
     
-    
+    plt.show()

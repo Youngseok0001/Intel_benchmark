@@ -4,7 +4,6 @@ import tensorlayer as tl
 import sys
 from matplotlib import pyplot as plt
 from IPython import display
-
 sys.path.append('..')
 from config import config
 
@@ -47,16 +46,17 @@ def vis_slice(img, gt, pred, slice_n, path):
     gt_slice   = COLORS[gt_slice]
     # minor processing
     img_slice  = np.stack((img_slice,)*3, axis=-1)
-    img_slice = normalise(img_slice)
+    img_slice_normalised = normalise(img_slice)
+    img_slice_normalised = img_slice_normalised.astype("uint8")
     
-    plt.imshow(img_slice)
+    plt.imshow(img_slice_normalised)
     plt.show()
     plt.imshow(gt_slice)
     plt.show()
     plt.imshow(pred_slice)
     plt.show()
         
-    tl.vis.save_images(np.asarray([img_slice, gt_slice, pred_slice]), size=(1, 3),
+    tl.vis.save_images(np.asarray([img_slice_normalised, gt_slice, pred_slice]), size=(1, 3),
         image_path=path)
 
 if __name__ == '__main__':
@@ -74,8 +74,8 @@ if __name__ == '__main__':
     tf.enable_eager_execution()
 
     
-    img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/imagesTr/"    
-    lab_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/labelsTr/"
+    img_loc = "../dataset/Task01_BrainTumour/imagesTr/"    
+    lab_loc = "../dataset/Task01_BrainTumour/labelsTr/"
 
     # get img and label array 
     img_path = get_path(img_loc)

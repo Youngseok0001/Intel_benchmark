@@ -30,21 +30,25 @@ def split_list(imgs_labels_path, ratio = 0.8):
     imgs_labels_path_test  = list(set(imgs_labels_path) - set(imgs_labels_path_train))
     
     return imgs_labels_path_train, imgs_labels_path_test
-    
-def _omit_slices(img_lab, condition = None):
-        
-    # bring 3rd axis forward
-    img = np.transpose(img_lab[0],(2,0,1,3))
-    lab = np.transpose(img_lab[1],(2,0,1))
-        
-    # apply condition to ith sice of tuple(img,label) and convert back to tensor
-    img, lab = list(map(np.asarray,zip(*(filter(condition, zip(img, lab))))))
-        
-    #convert back to original shape
-    img = np.transpose(img,(1,2,0,3))
-    lab = np.transpose(lab,(1,2,0))
 
-    return img,lab
+
+def _mean_std_shift(img_label, mean_shift, std_shift):
+    
+    return  (img_label[0] + mean_shift) * std_shift, img_label[1]
+
+
+def _elastic_transform(img_label, alpha=[10, 2e6, 2e6], sigma=[1, 25, 25]):
+    
+    img, label = img_label[0], np.expand_dims(img_label[1], -1)
+    img_label = np.concatenate((img,label), axis = -1)
+    
+    elastic_img_label = elastic_transform(img_label, alpha = alpha, sigma = sigma)
+    elastic_img, elastic_label = elastic_img_label[:,:,:,:-1], elastic_img_label[:,:,:,-1] 
+    
+    return elastic_img, elastic_label
+    
+    
+
     
 def _gaussian_noise(img_label, sigma):
     return (add_gaussian_noise(img_label[0], sigma),
@@ -92,7 +96,7 @@ def _flip(img_label, axis):
     return fliped_img, flipted_label
 
 def _normalise(img_label, means, stds): 
-    return ((img_label[0] - means) / (np.asarray(stds) ** 2),
+    return ((img_label[0] - means) / (np.asarray(stds)),
             img_label[1])    
 
 #.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-       
