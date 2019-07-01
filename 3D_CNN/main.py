@@ -17,7 +17,7 @@ pacakges installed:
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="3"
 
 from glob import glob
 from random import shuffle
@@ -27,7 +27,6 @@ from toolz import compose
 
 from matplotlib import pyplot as plt
 from IPython import display
-%matplotlib inline
 
 import numpy as np
 import nibabel as nib 
@@ -137,14 +136,22 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
     print("\n")
     im_lab_pred_test, values_to_load_test  = test_fn(model_test_fn, test_generator)
 
+    
+    saver = tf.train.Saver(max_to_keep = 3)
+        
     with tf.Session() as sess:
         
-        # initialize list of variables 
-        sess.run(tf.global_variables_initializer())
         sess.run(tf.local_variables_initializer())
-                
-        saver = tf.train.Saver(max_to_keep = 3)
-                
+        
+        # initialize list of variables 
+        ckpt = tf.train.get_checkpoint_state(config.model_save_path)
+        
+        if ckpt and tf.train.checkpoint_exists(ckpt.model_checkpoint_path):
+            saver.restore(sess, ckpt.model_checkpoint_path)
+        else:
+            sess.run(tf.global_variables_initializer())
+        
+
 
         # list to store test/train time for every iteration.
         times_test  = []

@@ -29,28 +29,25 @@ from .utils import get_data,\
 # functions 
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 def _preprocessor_numpy(img_dir, label_dir, is_train = True):
-    r1 = random.randint(0,2)
-    r2 = [np.random.uniform(-0.1,0.1), np.random.uniform(0.9,1.1)]
         
     # functions 
     my_gaussian_noise = partial(_gaussian_noise, sigma = config.sigma_gaussian)
     my_crop           = partial(_random_crop_image, patch_size = config.patch_size)
     my_normalise      = partial(_normalise, means = config.means, stds = config.stds)
-    my_flip           = partial(_flip, axis = r1)
-    my_meanstd_shift  = partial(_mean_std_shift, mean_shift = r2[0], std_shift = r2[1])
+    my_flip           = partial(_flip, axis = random.randint(0,2))
+    my_meanstd_shift  = partial(_mean_std_shift, mean_shift_range = config.mean_std_shift[0], std_shift_range = config.mean_std_shift[1])
     
     if is_train:
         # wrap functions
         composed = compose(my_flip,
                            my_crop,
                            my_meanstd_shift,
-                           my_gaussian_noise,
-                           my_normalise,
+                           my_normalise, 
                            get_img_label)
     
     if not is_train:
         # wrap functions
-        composed = compose(my_crop,
+        composed = compose(my_crop,                           
                            my_normalise,
                            get_img_label)
         

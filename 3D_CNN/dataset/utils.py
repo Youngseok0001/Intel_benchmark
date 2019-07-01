@@ -32,8 +32,9 @@ def split_list(imgs_labels_path, ratio = 0.8):
     return imgs_labels_path_train, imgs_labels_path_test
 
 
-def _mean_std_shift(img_label, mean_shift, std_shift):
-    
+def _mean_std_shift(img_label, mean_shift_range, std_shift_range):
+    mean_shift = np.random.uniform(*mean_shift_range)
+    std_shift = np.random.uniform(*std_shift_range)
     return  (img_label[0] + mean_shift) * std_shift, img_label[1]
 
 
@@ -47,8 +48,6 @@ def _elastic_transform(img_label, alpha=[10, 2e6, 2e6], sigma=[1, 25, 25]):
     
     return elastic_img, elastic_label
     
-    
-
     
 def _gaussian_noise(img_label, sigma):
     return (add_gaussian_noise(img_label[0], sigma),

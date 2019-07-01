@@ -89,7 +89,7 @@ def get_label_wise_dice_loss(y_true, y_pred):
 
 def get_label_wise_dice_coef(y_true, y_pred, max_label):
     y_true = tf.one_hot(y_true, depth = max_label)
-    return [get_dice_coef(y_true[:,:,:,:,index], y_pred[:,:,:,:,index]) 
+    return [get_dice_coef(y_true[:,:,:,:,index], y_pred[:,:,:,:,index]) + 0.0000001
                  for index
                  in range(max_label)]  
     
@@ -99,7 +99,7 @@ def get_dice_loss(*args, **kwargs):
 
 
 def get_exp_dice_loss(*args, **kwargs):
-    
+        
     return tf.reduce_sum(
             (-tf.math.log(
                 get_label_wise_dice_coef(*args, **kwargs))) ** 0.3) / args[-1]

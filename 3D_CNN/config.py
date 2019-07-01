@@ -10,8 +10,8 @@ data_pipeline_configs = \
       "lab_loc"           : "./dataset/Task01_BrainTumour/labelsTr/",
       "batch_size"        : 1,
       "epoch"             : 100,
-      "cpu_n"             : 30,
-      "prefetch"          : 100,
+      "cpu_n"             : 20,
+      "prefetch"          : 10,
       "split_ratio"       : 0.8
     }
 
@@ -20,7 +20,7 @@ data_proprocessing_configs = \
       "patch_size"        : [160, 192, 128],
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
-      "mean_std_shift"    : [np.random.uniform(-0.1,0.1), np.random.uniform(0.9,1.1)],
+      "mean_std_shift"    : [[-0.1,0.1], [0.9, 1.1]],
       "elas_alpha"        : [10, 2e6, 2e6],
       "elas_sigma"        : [1, 25, 25],
       "sigma_gaussian"    : 0.005,
@@ -43,11 +43,11 @@ model_configs = \
 train_configs = \
     {
     "max_to_keep"         : 3,
-    "model_name"          : "model_2_exp_ce",
+    "model_name"          : "model_5_exp_ce",
     "visualise"           : True,
-    "model_save_path"     : "./weights/model_2/",
-    "text_log_path"       : "./log/text/model_2/",
-    "visual_log_path"     : "./log//img/model_2/",
+    "model_save_path"     : "./weights/model_2_save/",
+    "text_log_path"       : "./log/text/model_5/",
+    "visual_log_path"     : "./log//img/model_5/",
     "colours"             : [[0,0,0],
                              [255,0,0],
                              [255,178,102],
