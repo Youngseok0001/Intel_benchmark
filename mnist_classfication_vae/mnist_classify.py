@@ -43,8 +43,6 @@ BATCH_SIZE = 256
 EPOCH = 2
 prefetch_buffer_size = 10
 
-print(a)
-
 # STEP 1: CREATE DATA_GENERATOR
 (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
 

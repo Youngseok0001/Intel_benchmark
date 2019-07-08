@@ -38,7 +38,7 @@ def _mean_std_shift(img_label, mean_shift_range, std_shift_range):
     return  (img_label[0] + mean_shift) * std_shift, img_label[1]
 
 
-def _elastic_transform(img_label, alpha=[10, 2e6, 2e6], sigma=[1, 25, 25]):
+def _elastic_transform(img_label, alpha, sigma):
     
     img, label = img_label[0], np.expand_dims(img_label[1], -1)
     img_label = np.concatenate((img,label), axis = -1)
@@ -98,12 +98,10 @@ def _normalise(img_label, means, stds):
     return ((img_label[0] - means) / (np.asarray(stds)),
             img_label[1])    
 
-#.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-       
 """
 FUNCTIONS FOR TF ARRAY 
 """
-def _set_size(img_label):
-    
-    return (tf.reshape(img_label[0], config.patch_size + [config.num_classes]),
-            tf.reshape(img_label[1], config.patch_size))    
+def _set_size(img_label, size):    
+    return (tf.reshape(img_label[0], size + [config.num_classes]),
+            tf.reshape(img_label[1], size))    
     

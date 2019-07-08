@@ -27,8 +27,10 @@ cal_mean_std = lambda img : [cal_mean(img),cal_std(img)]
 
 # execute
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/imagesTr/" 
-img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/labelsTr/" 
+#img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/imagesTr/" 
+#img_loc = "/home/jacob/Intel/3D_CNN/dataset/Task01_BrainTumour/labelsTr/" 
+img_loc = "/home/nuhs/Task01_BrainTumour/imagesTr/" 
+lab_loc = "/home/nuhs/Task01_BrainTumour/labelsTr/" 
 
 from itertools import islice
 
@@ -50,7 +52,7 @@ def _omit_labeless_slices(lab, condition = None):
     
 from itertools import islice
 
-lab_path = get_path(img_loc)
+lab_path = get_path(lab_loc)
 labs = map(get_data, img_path)
 condition = lambda lab : np.sum(lab) > 0
 lens = (_omit_labeless_slices(lab, condition = condition) for lab in labs)

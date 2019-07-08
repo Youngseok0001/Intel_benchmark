@@ -42,7 +42,7 @@ def get_ce(gt, logit, weighted = True):
         _ce = tf.nn.sparse_softmax_cross_entropy_with_logits(labels = gt,
                                                              logits = logit)
     
-    return tf.reduce_mean(_ce) + epsilon
+    return tf.reduce_mean(_ce)
 
 def get_acc(gt, pred):
     
@@ -68,7 +68,7 @@ def get_iou(gt, pred):
     return mean_iou 
 
 
-def get_dice_coef(y_true, y_pred, smooth= 0.0000001):
+def get_dice_coef(y_true, y_pred, smooth= 0.0001):
     
     y_true = tf.cast(y_true, tf.float32)
     y_pred = tf.cast(y_pred, tf.float32)
@@ -89,7 +89,7 @@ def get_label_wise_dice_loss(y_true, y_pred):
 
 def get_label_wise_dice_coef(y_true, y_pred, max_label):
     y_true = tf.one_hot(y_true, depth = max_label)
-    return [get_dice_coef(y_true[:,:,:,:,index], y_pred[:,:,:,:,index]) + 0.0000001
+    return [get_dice_coef(y_true[:,:,:,:,index], y_pred[:,:,:,:,index])
                  for index
                  in range(max_label)]  
     
@@ -100,9 +100,9 @@ def get_dice_loss(*args, **kwargs):
 
 def get_exp_dice_loss(*args, **kwargs):
         
-    return tf.reduce_sum(
+    return tf.reduce_mean(
             (-tf.math.log(
-                get_label_wise_dice_coef(*args, **kwargs))) ** 0.3) / args[-1]
+                get_label_wise_dice_coef(*args, **kwargs))) ** 0.3) 
     
 if __name__ == '__main__':
 

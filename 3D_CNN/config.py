@@ -8,15 +8,16 @@ config = EasyDict()
 data_pipeline_configs = \
     { "img_loc"           : "./dataset/Task01_BrainTumour/imagesTr/",    
       "lab_loc"           : "./dataset/Task01_BrainTumour/labelsTr/",
-      "batch_size"        : 1,
+      "batch_size"        : 8,
       "epoch"             : 100,
-      "cpu_n"             : 20,
-      "prefetch"          : 10,
+      "cpu_n"             : 48,
+      "prefetch"          : 4,
       "split_ratio"       : 0.8
     }
 
 data_proprocessing_configs = \
     {
+      "default_img_size"  : [240, 240, 128],
       "patch_size"        : [160, 192, 128],
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
@@ -34,7 +35,6 @@ model_configs = \
     "PADDING"             : "same",
     "DEEP_SUPERVISION"    : True,
     "num_classes"         : 4,
-    "optimizer"           : tf.train.AdamOptimizer,
     "lr"                  : 0.0001,
     "loss_weights"        : [0.2,0.5,0.3]
     }
@@ -43,11 +43,11 @@ model_configs = \
 train_configs = \
     {
     "max_to_keep"         : 3,
-    "model_name"          : "model_5_exp_ce",
+    "model_name"          : "model_1",
     "visualise"           : True,
-    "model_save_path"     : "./weights/model_2_save/",
-    "text_log_path"       : "./log/text/model_5/",
-    "visual_log_path"     : "./log//img/model_5/",
+    "model_save_path"     : "./weights/model_1/",
+    "text_log_path"       : "./log/text/model_1/",
+    "visual_log_path"     : "./log/img/model_1/",
     "colours"             : [[0,0,0],
                              [255,0,0],
                              [255,178,102],
@@ -55,7 +55,12 @@ train_configs = \
     }
 
 
+hvd_configs = {"intra_op_parallelism_threads" : 24,
+               "inter_op_parallelism_threads" : 2}
+
+
 config.update(data_pipeline_configs)
 config.update(data_proprocessing_configs)
 config.update(model_configs)
 config.update(train_configs)
+config.update(hvd_configs)

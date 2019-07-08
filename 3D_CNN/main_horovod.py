@@ -2,23 +2,22 @@
 enviroment: 
     * Ubuntu 16.04.6
     * python 3.7
-    * Intel(R) Xeon(R) CPU E5-2650 v4 @ 2.20GHz (20 cores used for preprocessing)
-    * V100 32G MEMMORY(utilized entire memmory)
+    * Intel(R) Xeon(R) SP 8268 @ 2.90GHz (24 cores used for Deep learning)
+    * No GPU
     
 pacakges installed: 
-    * tf-1.13
+    * intel-tensorflow-1.13
     * numpy
     * toolz(funcitonal programmings)
-    * nibabel(data-loadding)
+    * nibabel(data-loading)
     * dltk(pre-processing)
+    * tensorpack (latest version)
+    * tensorlayer (== 1.11)
     * easydict(config dictionary)
 """    
 # packages
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
-
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="3"
-
 from glob import glob
 from random import shuffle
 from functools import reduce, partial
@@ -32,8 +31,10 @@ import numpy as np
 import nibabel as nib 
 import time
 import tensorflow as tf 
+import horovod.tensorflow as hvd
 
-tf.reset_default_graph()
+
+hvd.init()
 
 # personal modules and functions
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
@@ -47,9 +48,14 @@ from network.models import unet3d
 from network.metrics import *
 from network.save_load_utils import save
 
+# CPU optimization environmental variable setting
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+CONFIG = tf.ConfigProto(intra_op_parallelism_threads = config.intra_op_parallelism_threads,
+                        inter_op_parallelism_threads = config.inter_op_parallelism_threads,
+                        allow_soft_placement         = True) 
 
-# get img and label array 
+#-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
+# get img and label array
 imgs_path = get_path(config.img_loc)
 labels_path = get_path(config.lab_loc)
 
@@ -63,24 +69,27 @@ train_img, train_label = zip(*train_img_labels_path)
 test_img, test_label   = zip(*test_img_labels_path)
 
 # train data pipeline 
+seed = hvd.rank()  # Make sure each worker gets different random seed
 dataset_train = get_data_pipeline(train_img, train_label, 
                                   batch_size = config.batch_size, 
                                   prefetch   = config.prefetch,
                                   cpu_n      = config.cpu_n,
                                   epoch      = config.epoch,
-                                  is_train   = True)
+                                  is_train   = True,
+                                  seed       = seed)
 
 
 # test data pipeline
 dataset_test = get_data_pipeline(test_img, test_label,
                                  batch_size  = config.batch_size, 
-                                 prefetch    = 10,
-                                 cpu_n       = 10,
+                                 prefetch    = config.prefetch,
+                                 cpu_n       = config.cpu_n,
                                  epoch       = config.epoch,
-                                 is_train    = False)
+                                 is_train    = False,
+                                 seed        = seed)
                                 
 
-# get models     
+# get models    
 print("initializing models ... \n")
 train_model = partial(unet3d, reuse = False)
 test_model  = partial(unet3d, reuse = True)
@@ -103,10 +112,14 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
         dice_loss       = get_dice_loss(label, pred, config.depth) 
         exp_dice_loss   = get_exp_dice_loss(label, pred, config.depth) 
         label_wise_dice = get_label_wise_dice_coef(label, pred, config.depth)
-        overall_loss    = (0.2 * ce_loss) + \
-                          (0.8 * exp_dice_loss)
+        overall_loss    = (0.2 * ce_loss) + (0.8 * exp_dice_loss)
         
-        optimizer = config.optimizer()
+        optimizer = tf.train.AdamOptimizer(learning_rate = hvd.size() * config.lr,  
+                                           epsilon       = 1e-04, 
+                                           use_locking   = True)
+
+        
+        optimizer = hvd.DistributedOptimizer(optimizer)
         train_op  = optimizer.minimize(overall_loss)
 
         values_to_load = [ce_loss, dice_loss, exp_dice_loss, overall_loss, # lossees
@@ -139,9 +152,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
     
     saver = tf.train.Saver(max_to_keep = 3)
         
-    with tf.Session() as sess:
+    with tf.Session(config = CONFIG) as sess:
         
         sess.run(tf.local_variables_initializer())
+
         
         # initialize list of variables 
         ckpt = tf.train.get_checkpoint_state(config.model_save_path)
@@ -150,7 +164,7 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
             saver.restore(sess, ckpt.model_checkpoint_path)
         else:
             sess.run(tf.global_variables_initializer())
-        
+            sess.run(hvd.broadcast_global_variables(0))
 
 
         # list to store test/train time for every iteration.
@@ -176,9 +190,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
 
             for i in range(len(train_img_labels_path)//config.batch_size): 
                 
+                itr_time = time.time() 
                 _im, _lab, _pred, _ce_loss, _dice_loss, _exp_dice_loss, _overall_loss, _acc, _iou, _label_wise_dice, *_ = sess.run(im_lab_pred_train + values_to_load_train)  
-                
-                if i % 1 == 0:
+                print("Duration per iteration = ",time.time()-itr_time, " s") 
+                if (i % 1 == 0) and (hvd.rank() == 0):
                     
                     print_log("epoch:{} iteration:{}".format(e,i))
                     print_log("    LOSS            = {}".format(_overall_loss))
@@ -190,9 +205,8 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                     print_log("    DICE label wise = {}".format(_label_wise_dice))
                     print_log("\n\n")                    
                     
-                if (i % 20 == 0):
-                    if not os.path.exists(config.visual_log_path):
-                        os.makedirs(config.visual_log_path)
+                if (i % 20 == 0) and (hvd.rank() == 0): 
+                    if not os.path.exists(config.visual_log_path):os.makedirs(config.visual_log_path)
                     vis_slice(_im, _lab, _pred, 70, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
         
             end_time = time.time()
@@ -211,31 +225,34 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                 
             start_time = time.time()
             
-            for i in range(len(test_img_labels_path)//config.batch_size):    
+            if (hvd.rank() == 0):
                 
-                _acc, _iou, _label_wise_dice, *_ = sess.run(values_to_load_test)   
-                                
-                acc_stack.append(_acc)   
-                iou_stack.append(_iou)
-                label_wise_dice_stack.append(_label_wise_dice)
+                for i in range(len(test_img_labels_path)//config.batch_size):    
 
-            
-            print_log("epoch:{}".format(e))
-            print_log("    test ACC  = {}".format(np.mean(acc_stack)))
-            print_log("    test IOU  = {}".format(np.mean(iou_stack)))
-            print_log("    test DICE label wise = {}".format(np.mean(label_wise_dice_stack, axis = 0)))
-            print_log("\n")                                             
+                    _acc, _iou, _label_wise_dice, *_ = sess.run(values_to_load_test)   
 
-            end_time = time.time()
-            time_diff = end_time - start_time 
-                        
-            times_test.append(time_diff)
-            if not os.path.exists(config.model_save_path):
-                os.makedirs(config.model_save_path)
-            print_log("Saving model ....")
-            save(sess, saver, config.model_save_path, config.model_name, counter)
-            
-            f_txt.close() 
+                    acc_stack.append(_acc)   
+                    iou_stack.append(_iou)
+                    label_wise_dice_stack.append(_label_wise_dice)
+
+
+                print_log("epoch:{}".format(e))
+                print_log("    test ACC  = {}".format(np.mean(acc_stack)))
+                print_log("    test IOU  = {}".format(np.mean(iou_stack)))
+                print_log("    test DICE label wise = {}".format(np.mean(label_wise_dice_stack, axis = 0)))
+                print_log("\n")                                             
+
+                end_time = time.time()
+                time_diff = end_time - start_time 
+
+                times_test.append(time_diff)
+                if not os.path.exists(config.model_save_path):
+                    os.makedirs(config.model_save_path)
+                print_log("Saving model ....")
+
+                save(sess, saver, config.model_save_path, config.model_name, counter)
+
+                f_txt.close() 
             
         print("the training has ended \n")
         
@@ -251,4 +268,5 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                                                                 lb   = mean - 2*se,
                                                                 ub   = mean + 2*se))    
            
-run(train_model, test_model,dataset_train, dataset_test)
+run(train_model, test_model, 
+    dataset_train, dataset_test)

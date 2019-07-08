@@ -1,0 +1,17 @@
+__pycache__
+.ipynb_checkpoints
+.DS_Store
+*.swp
+.vimrc
+!.gitkeep
+
+
+3D_CNN/dataset/Task01_BrainTumour
+3D_CNN/weights
+3D_CNN/log
+
+skin-image-recognition/datasets/ISIC_2018/
+skin-image-recognition/weights/pretrained/vgg_19.ckpt
+skin-image-recognition/weights/pretrained/inception_v4.ckpt
+skin-image-recognition/weights/pretrained/tf-densenet161.ckpt.data-00000-of-00001
+skin-image-recognition/weights/pretrained/tf-densenet161.ckpt.meta

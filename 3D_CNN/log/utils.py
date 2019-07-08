@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import tensorlayer as tl
+#import tensorlayer as tl
 import sys
 from matplotlib import pyplot as plt
 from IPython import display
@@ -74,8 +74,10 @@ if __name__ == '__main__':
     tf.enable_eager_execution()
 
     
-    img_loc = "../dataset/Task01_BrainTumour/imagesTr/"    
-    lab_loc = "../dataset/Task01_BrainTumour/labelsTr/"
+    #img_loc = "../dataset/Task01_BrainTumour/imagesTr/"    
+    #lab_loc = "../dataset/Task01_BrainTumour/labelsTr/"
+    img_loc = "/home/nuhs//Task01_BrainTumour/imagesTr/"    
+    lab_loc = "/home/nuhs/Task01_BrainTumour/labelsTr/"
 
     # get img and label array 
     img_path = get_path(img_loc)

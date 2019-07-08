@@ -1,26 +1,104 @@
+import sys
+sys.path.append('..')
+from config import *
+
+import tensorflow as tf
+
+from tensorflow.keras import layers
+from tensorflow.keras import models
+
+
+#############################################
+#basic 3D-Unet implementation 
+#############################################
+
+    
+def unet3d_keras():
+
+    """
+    3D U-Net
+    """
+    def ConvolutionBlock(x, name, fms, params):
+
+        x = layers.Conv3D(filters=fms, **params, name=name+"_conv0")(x)
+        x = layers.BatchNormalization(name=name+"_bn0")(x)
+        x = layers.Activation("relu", name=name+"_relu0")(x)
+
+        x = layers.Conv3D(filters=fms, **params, name=name+"_conv1")(x)
+        x = layers.BatchNormalization(name=name+"_bn1")(x)
+        x = layers.Activation("relu", name=name)(x)
+
+        return x
+
+    inputs = layers.Input(shape = config.patch_size + [4], name = "MRImages")
+
+    params = dict(kernel_size = (3, 3, 3),
+                  activation = None,
+                  padding = "same",
+                  data_format = "channels_last",
+                  kernel_initializer="he_uniform")
+
+    # Transposed convolution parameters
+    params_trans = dict(data_format= "channels_last",
+                        kernel_size=(2, 2, 2),
+                        strides=(2, 2, 2),
+                        padding="same")
+
+
+    # BEGIN - Encoding path
+    encodeA = ConvolutionBlock(inputs, "encodeA", config.BASE_FILTER, params)
+    poolA = layers.MaxPooling3D(name="poolA", pool_size=(2, 2, 2))(encodeA)
+
+    encodeB = ConvolutionBlock(poolA, "encodeB", config.BASE_FILTER*2, params)
+    poolB = layers.MaxPooling3D(name="poolB", pool_size=(2, 2, 2))(encodeB)
+
+    encodeC = ConvolutionBlock(poolB, "encodeC", config.BASE_FILTER*4, params)
+    poolC = layers.MaxPooling3D(name="poolC", pool_size=(2, 2, 2))(encodeC)
+
+    encodeD = ConvolutionBlock(poolC, "encodeD", config.BASE_FILTER*8, params)
+    poolD = layers.MaxPooling3D(name="poolD", pool_size=(2, 2, 2))(encodeD)
+
+    encodeE = ConvolutionBlock(poolD, "encodeE", config.BASE_FILTER*16, params)
+    # END - Encoding path
+
+    # BEGIN - Decoding path
+    up = layers.UpSampling3D(name="upE", size=(2, 2, 2))(encodeE)
+
+    concatD = layers.concatenate([up, encodeD], axis = -1, name="concatD")
+    decodeC = ConvolutionBlock(concatD, "decodeC", config.BASE_FILTER*8, params)
+
+        
+    up = layers.UpSampling3D(name="upC", size=(2, 2, 2))(decodeC)
+    concatC = layers.concatenate([up, encodeC], axis = -1, name="concatC")
+    decodeB = ConvolutionBlock(concatC, "decodeB", config.BASE_FILTER*4, params)
+    
+    up = layers.UpSampling3D(name="upB", size=(2, 2, 2))(decodeB)
+    concatB = layers.concatenate([up, encodeB], axis = -1, name="concatB")
+    decodeA = ConvolutionBlock(concatB, "decodeA", config.BASE_FILTER*2, params)
+
+    up = layers.UpSampling3D(name="upA", size=(2, 2, 2))(decodeA)
+    concatA = layers.concatenate([up, encodeA], axis = -1, name="concatA")
+
+    # END - Decoding path
+    convOut = ConvolutionBlock(concatA, "convOut", config.BASE_FILTER, params)
+    logits = layers.Conv3D(name="PredictionMask",filters = config.num_classes, kernel_size=(1, 1, 1), data_format="channels_last")(convOut)
+
+    model = models.Model(inputs=[inputs], outputs=[logits])
+    
+    print(model.summary())
+
+    return model
+
+
     
 import tensorflow as tf
 import tensorflow.keras as K
 import numpy as np
 import sys
-
-sys.path.append('..')
-from config import *
-
-
-
-# -*- coding: utf-8 -*-
-# File: custom_ops.py
-###
-# Code are borrowed from tensorpack modified to support 5d input for batchnorm.
-# https://github.com/tensorpack/tensorpack/blob/master/tensorpack/models/batch_norm.py
-###
-
-from tensorflow.contrib.framework import add_model_variable
 from tensorpack import VariableHolder
 
 #############################################
-#low level 3D-Unet implementation 
+#Complicated 3D-Unet implementation 
 #############################################
 
 
@@ -136,6 +214,22 @@ def UnetUpsample(prefix, l, num_filters):
                         name="up_conv1_{}".format(prefix))
     return l
 
+def Unet3dBlock(prefix, l, kernels, n_feat, s):
+    
+    l_in = l
+
+    
+    for i in range(2):
+        l = tf.layers.conv3d(inputs=l, 
+                   filters=n_feat,
+                   kernel_size=kernels,
+                   strides=1,
+                   padding=PADDING,
+                   activation=lambda x, name=None: BN_ReLU(x),
+                   name="{}_conv_{}".format(prefix, i))
+
+    return l_in + l
+
 
 def InstanceNorm5d(x, epsilon=1e-5, use_affine=True, gamma_init=None, data_format='channels_last'):
 
@@ -174,170 +268,46 @@ def BN_ReLU(inputs):
     return tf.nn.relu6(l)
 
 
-def Unet3dBlock(prefix, l, kernels, n_feat, s):
-    
-    l_in = l
-
-    
-    for i in range(2):
-        l = tf.layers.conv3d(inputs=l, 
-                   filters=n_feat,
-                   kernel_size=kernels,
-                   strides=1,
-                   padding=PADDING,
-                   activation=lambda x, name=None: BN_ReLU(x),
-                   name="{}_conv_{}".format(prefix, i))
-
-    return l_in + l
-
-
-
-
 if __name__ == '__main__':
     
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"]="3"
-
-    tf.enable_eager_execution()
-    x = tf.random.normal(shape = (1,256,256,128,4))
-    y = unet3d(x, reuse = True)
-    y = unet3d(x, reuse = False)
-
-
-        
-
-    
-#############################################
-#KERAS 3D-Unet
-#############################################
-
-"""
-KERAS MODEL IS STILL UNDER DEVEPMENT
-YOU CAN IGNORE IT FOR NOW
-"""
-
-# down_block: conv.conv.pool 
-class down_block(K.Model):
-    
-    def __init__(self, filter_n, name):
-        super(down_block, self).__init__(name)
-        
-        self.convolve_1 = K.layers.Conv3D(filter_n, 
-                                          (3, 3, 3),
-                                          activation='relu', 
-                                          padding='same')
-        
-        self.convolve_2 = K.layers.Conv3D(filter_n, 
-                                          (3, 3, 3), 
-                                          activation='relu',
-                                          padding='same')
-        
-        self.pool       = K.layers.MaxPooling3D(pool_size=(2, 2, 2), 
-                                                padding='same')
-        
-    def call(self, x):
-        
-        conv = self.convolve_1(x)
-        conv = self.convolve_2(conv)
-        conc = tf.concat([x, conv], axis=-1)
-        pool = self.pool(conc)
-        
-        return conv, conc, pool
-    
-# waist_block: conv.conv
-class waist_block(K.Model):
-    
-    def __init__(self, filter_n, name):
-        super(waist_block, self).__init__(name)
-        
-        self.convolve_1 = K.layers.Conv3D(filter_n, 
-                                          (3, 3, 3), 
-                                          activation='relu', 
-                                          padding='same')
-        
-        self.convolve_2 = K.layers.Conv3D(filter_n, 
-                                          (3, 3, 3), 
-                                          activation='relu', 
-                                          padding='same')
-        
-    def call(self, x):
-        
-        conv = self.convolve_1(x)
-        conv = self.convolve_2(conv)
-        conc = tf.concat([x, conv], axis=-1)
-        
-        return conc     
-
-# up_block: t_conv,conv,conv
-class up_block(K.Model):
-
-    def __init__(self, filter_n, name):
-        super(up_block, self).__init__(name)
-        
-        self.transposed_convolve =  K.layers.Conv3DTranspose(filter_n, 
-                                                             (2, 2, 2),
-                                                             strides=(2, 2, 2),
-                                                             padding='same')
-        
-        self.convolve_1          =  K.layers.Conv3D(filter_n,
-                                                    (3, 3, 3),
-                                                    activation='relu',
-                                                    padding='same')
-        
-        self.convolve_2          =  K.layers.Conv3D(filter_n,
-                                                    (3, 3, 3),
-                                                    activation='relu', 
-                                                    padding='same')
-        
-    def call(self, conc, conv):
-         
-        conc = tf.concat([self.transposed_convolve(conc), conv], axis =-1)
-        conv = self.convolve_1(conc)
-        conv = self.convolve_2(conv)
-        conc = tf.concat([conc,conv], axis=-1)
-        
-        return conc    
-              
-        
-
-# Unet with few skip connections in each block
-class unet_3d(K.Model):
-    
-    def __init__(self,name):
-        super(unet_3d, self).__init__(name = name)
-        
-        self.down_1 = down_block(16,"down_1")
-        self.down_2 = down_block(16 * 2**1, "down_2")
-        self.down_3 = down_block(16 * 2**2, "down_3")
-        self.down_4 = down_block(16 * 2**3, "down_4")
-        
-        self.waist = waist_block(16 * 2**3,"waist")
-        
-        self.up_1 = up_block(16 * 2**3,"up_1")
-        self.up_2 = up_block(16 * 2**2,"up_2")
-        self.up_3 = up_block(16 * 2**1,"up_3")
-        self.up_4 = up_block(16,"up_4")
+    from functools import partial 
+    from metrics import *
     
     
-    def forward(self, x, n_classes):
-        
-        conv_1, conc_1, pool_1 = self.down_1(x)
-        conv_2, conc_2, pool_2 = self.down_2(pool_1)
-        conv_3, conc_3, pool_3 = self.down_3(pool_2)
-        conv_4, conc_4, pool_4 = self.down_4(pool_3)
-        
-        waist = self.waist(pool_4)
-        
-        conc_1 = self.up_1(waist, conv_4)
-        conc_2 = self.up_2(conc_1, conv_3)
-        conc_3 = self.up_3(conc_2, conv_2)
-        conc_4 = self.up_4(conc_3, conv_1)
-                
-        logit = K.layers.Conv3D(n_classes,
-                                (3,3,3), 
-                                padding='same', 
-                                activation = "sigmoid")(conc_4)
-        
-        return logit
+    x = tf.random_normal(shape = (1,256,256,128,4))
+    gt = tf.argmax(tf.random_normal(shape = (1,256,256,128,4)), axis = -1)
     
+    model = partial(unet3d, reuse = False)
+    logit = model(x)
+    pred = tf.nn.softmax(logit, axis = -1)
+
+    ce = get_ce(gt, pred, weighted = False)
+    acc = get_acc(gt, pred)
+    iou, iou_op = get_iou(gt, pred)
+    dice_loss = get_dice_loss(gt, pred, 4)
+    exp_dice_loss = get_exp_dice_loss(gt, pred, 4)
+    label_wise_dice = get_label_wise_dice_coef(gt, pred, 4)
+
     
+    optimizer = tf.train.AdadeltaOptimizer()
+
+    train_op  = optimizer.minimize(dice_loss + ce + exp_dice_loss)
+    
+    to_call = [acc, ce, dice_loss, exp_dice_loss, label_wise_dice, iou_op, train_op]
+
+    with tf.Session() as sess:
+        
+        sess.run(tf.global_variables_initializer())
+        sess.run(tf.local_variables_initializer())
+        
+        
+        for _ in range(10):
+            
+            [_acc, _ce, _dice_loss, _exp_dice_loss,_label_wise_dice, *_] = sess.run(to_call)
+            
+            print("ce                   :",_ce)
+            print("acc                  :",_acc) 
+            print("dice loss            :",_dice_loss)
+            print("exp dice loss        :",_exp_dice_loss)        
+            print("dice coef label wise :",_label_wise_dice)
+            print("iou                  :",sess.run(iou) * 100)

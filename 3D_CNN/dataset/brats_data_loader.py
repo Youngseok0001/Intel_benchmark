@@ -31,7 +31,7 @@ from .utils import get_data,\
 def _preprocessor_numpy(img_dir, label_dir, is_train = True):
         
     # functions 
-    my_gaussian_noise = partial(_gaussian_noise, sigma = config.sigma_gaussian)
+    #my_gaussian_noise = partial(_gaussian_noise, sigma = config .sigma_gaussian)
     my_crop           = partial(_random_crop_image, patch_size = config.patch_size)
     my_normalise      = partial(_normalise, means = config.means, stds = config.stds)
     my_flip           = partial(_flip, axis = random.randint(0,2))
@@ -59,13 +59,19 @@ def _preprocessor_numpy(img_dir, label_dir, is_train = True):
     
     
 def _preprocessor_tensor(img, label, is_train = True):
-        
-    # functions
-    my_set_size = _set_size
+            
+    if is_train:
+        # functions
+        my_set_size = partial(_set_size, size = config.patch_size)
+        # wrap 
+        composed = compose(my_set_size)
     
-    # wrap 
-    composed = compose(my_set_size)
-    
+    if not is_train : 
+        # functions
+        my_set_size = partial(_set_size, size = config.default_img_size)
+         # wrap 
+        composed = compose(my_set_size)
+
     # apply
     img_processed, label_processed = composed((img,label))
     
@@ -74,14 +80,15 @@ def _preprocessor_tensor(img, label, is_train = True):
     
     return img_processed,  label_processed
 
-def get_data_pipeline(imgs_path, labels_path, epoch, batch_size = 1, prefetch = 4, cpu_n = 10, is_train = True):
+def get_data_pipeline(imgs_path, labels_path, epoch, seed, cpu_n = 10, batch_size = 1, prefetch = 4, is_train = True):
+    
+    random.seed(seed)
     
     preprocessor_numpy  = partial(_preprocessor_numpy, is_train = is_train)
     preprocessor_tensor = partial(_preprocessor_tensor, is_train = is_train)
     
     return tf.data.Dataset.from_tensor_slices((list(imgs_path), list(labels_path))).\
         repeat(epoch).\
-        shuffle(386).\
         map(lambda img_path, label_path: 
             tuple(tf.py_func(preprocessor_numpy, [img_path, label_path], [tf.float32, tf.int32])), 
                 num_parallel_calls = cpu_n).\
@@ -94,9 +101,6 @@ if __name__ == '__main__':
     
     import os
     import tensorflow as tf
-    os.environ["CUDA_VISIBLE_DEVICES"]="1"
-    tf.enable_eager_execution()
-
     
     from matplotlib import pyplot as plt
     from IPython import display
@@ -110,7 +114,7 @@ if __name__ == '__main__':
 
     # get img and label array 
     img_path = get_path(img_loc)
-    label_path = get_path(lab_loc)
+    label_path = get_path(lab_loc)[:len(img_path)]
 
     dataset = get_data_pipeline(img_path, label_path, 
                                   batch_size = config.batch_size, 
@@ -120,15 +124,17 @@ if __name__ == '__main__':
                                   is_train   = True)
     
     generator = dataset.make_one_shot_iterator()
-    img, lab = generator.get_next()
+    _img, _lab = generator.get_next()
     
-    
-    print(np.mean(img))
-    print(np.std(img))
-    
-    plt.imshow(img[0,:,:,50,0])
+    with tf.Session() as sess:
+        
+        for _ in range(100):
+            img, lab = sess.run([_img,_lab])
+            print(np.mean(img))
+            print(np.std(img))
 
-    plt.show()
-    plt.imshow(lab[0,:,:,50])
-    
-    plt.show()
+            plt.imshow(img[0,:,:,50,0])
+
+            plt.show()
+            plt.imshow(lab[0,:,:,50])
+            plt.show()
