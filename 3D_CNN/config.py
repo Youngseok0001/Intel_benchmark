@@ -8,9 +8,9 @@ config = EasyDict()
 data_pipeline_configs = \
     { "img_loc"           : "./dataset/Task01_BrainTumour/imagesTr/",    
       "lab_loc"           : "./dataset/Task01_BrainTumour/labelsTr/",
-      "batch_size"        : 8,
+      "batch_size"        : 1,
       "epoch"             : 100,
-      "cpu_n"             : 48,
+      "cpu_n"             : 10,
       "prefetch"          : 4,
       "split_ratio"       : 0.8
     }

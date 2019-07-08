@@ -22,7 +22,7 @@ import os
 from glob import glob
 from random import shuffle
 from functools import reduce, partial
-from random import randint, shuffle 
+from random import randint, shuffle, seed
 from toolz import compose
 
 from matplotlib import pyplot as plt
@@ -33,6 +33,7 @@ import nibabel as nib
 import time
 import tensorflow as tf 
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 # personal modules and functions
 #-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.-.
 from config import *
@@ -66,7 +67,8 @@ dataset_train = get_data_pipeline(train_img, train_label,
                                   prefetch   = config.prefetch,
                                   cpu_n      = config.cpu_n,
                                   epoch      = config.epoch,
-                                  is_train   = True)
+                                  is_train   = True,
+				  seed       = seed(0))
 
 
 # test data pipeline
@@ -75,7 +77,8 @@ dataset_test = get_data_pipeline(test_img, test_label,
                                  prefetch    = 10,
                                  cpu_n       = 10,
                                  epoch       = config.epoch,
-                                 is_train    = False)
+                                 is_train    = False,
+                                 seed        = seed(0))
                                 
 
 # get models     
