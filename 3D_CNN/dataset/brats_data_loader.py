@@ -45,9 +45,12 @@ def _preprocessor_numpy(img_dir, label_dir, is_train = True):
                            my_normalise, 
                            get_img_label)
     
-    if not is_train:
+    if not is_train:    
+        
+        my_crop           = partial(_random_crop_image, patch_size = config.default_img_size)
+        
         # wrap functions
-        composed = compose(my_crop,                           
+        composed = compose(my_crop,
                            my_normalise,
                            get_img_label)
         
@@ -121,7 +124,8 @@ if __name__ == '__main__':
                                   prefetch   = config.prefetch,
                                   cpu_n      = config.cpu_n,
                                   epoch      = config.epoch,
-                                  is_train   = True)
+                                  is_train   = False,
+                                  seed       = 1)
     
     generator = dataset.make_one_shot_iterator()
     _img, _lab = generator.get_next()

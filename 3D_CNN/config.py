@@ -17,7 +17,7 @@ data_pipeline_configs = \
 
 data_proprocessing_configs = \
     {
-      "default_img_size"  : [240, 240, 128],
+      "default_img_size"  : [200, 200, 128],
       "patch_size"        : [160, 192, 128],
       "means"             : [73.7, 97.7, 97.2, 77.7],
       "stds"              : [179.7, 231.4, 231.3, 192.3],
