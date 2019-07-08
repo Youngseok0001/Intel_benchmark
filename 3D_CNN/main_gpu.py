@@ -190,10 +190,10 @@ def run(model_train_fn, model_test_fn, input_train_fn, input_test_fn):
                     print_log("    DICE label wise = {}".format(_label_wise_dice))
                     print_log("\n\n")                    
                     
-                if (i % 20 == 0):
-                    if not os.path.exists(config.visual_log_path):
-                        os.makedirs(config.visual_log_path)
-                    vis_slice(_im, _lab, _pred, 70, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
+               # if (i % 20 == 0):
+               #     if not os.path.exists(config.visual_log_path):
+               #         os.makedirs(config.visual_log_path)
+               #     vis_slice(_im, _lab, _pred, 70, config.visual_log_path +"train_{}epoch_{}iter.png".format(e,i))
         
             end_time = time.time()
             time_diff = end_time - start_time 
